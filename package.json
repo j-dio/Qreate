@@ -24,10 +24,18 @@
   },
   "homepage": "https://github.com/j-dio/Qreate#readme",
   "dependencies": {
+    "@xstate/react": "^6.0.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "electron": "^38.4.0",
     "electron-builder": "^26.0.12",
+    "lucide-react": "^0.548.0",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "tailwind-merge": "^3.3.1",
+    "xstate": "^5.23.0",
+    "zod": "^4.1.12",
+    "zustand": "^5.0.8"
   },
   "devDependencies": {
     "@types/node": "^24.9.1",
@@ -36,12 +44,15 @@
     "@typescript-eslint/eslint-plugin": "^8.46.2",
     "@typescript-eslint/parser": "^8.46.2",
     "@vitejs/plugin-react": "^5.1.0",
+    "autoprefixer": "^10.4.21",
     "electron-vite": "^4.0.1",
     "eslint": "^9.38.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
+    "postcss": "^8.5.6",
     "prettier": "^3.6.2",
+    "tailwindcss": "^4.1.16",
     "typescript": "^5.9.3",
     "vite": "^7.1.12"
   }

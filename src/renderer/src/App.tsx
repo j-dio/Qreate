@@ -23,7 +23,7 @@ function App() {
   return (
     <div style={{ padding: '2rem', fontFamily: 'system-ui' }}>
       <h1>Welcome to Qreate!</h1>
-      <p>Your automated exam creator is ready to build.</p>
+      <p>Let's start the development!</p>
 
       {/* This is a comment in JSX */}
       <div style={{ marginTop: '2rem' }}>
