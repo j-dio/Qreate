@@ -1,0 +1,49 @@
+{
+  "compilerOptions": {
+    /* Language and Environment */
+    "target": "ES2020",                          // What JavaScript version to compile to
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],    // What built-in APIs are available
+    "jsx": "react-jsx",                          // How to handle JSX (React's HTML-like syntax)
+
+    /* Modules */
+    "module": "ESNext",                          // Use modern ES modules
+    "moduleResolution": "bundler",               // How to find imported modules
+    "resolveJsonModule": true,                   // Allow importing JSON files
+    "baseUrl": ".",                              // Base directory for imports
+    "paths": {                                   // Path aliases (shortcuts)
+      "@/*": ["./src/*"],                        // Use @/ instead of ./src/
+      "@main/*": ["./src/main/*"],
+      "@renderer/*": ["./src/renderer/*"],
+      "@shared/*": ["./src/shared/*"]
+    },
+
+    /* Type Checking */
+    "strict": true,                              // Enable ALL strict type-checking
+    "noUnusedLocals": true,                      // Error on unused variables
+    "noUnusedParameters": true,                  // Error on unused function parameters
+    "noFallthroughCasesInSwitch": true,         // Error on switch fallthrough
+    "noImplicitReturns": true,                   // Error if function doesn't return
+
+    /* Interop Constraints */
+    "esModuleInterop": true,                     // Better CommonJS/ES module compatibility
+    "allowSyntheticDefaultImports": true,        // Allow default imports from modules
+    "isolatedModules": true,                     // Ensure each file can be transpiled separately
+
+    /* Emit */
+    "declaration": true,                         // Generate .d.ts files
+    "declarationMap": true,                      // Generate sourcemaps for .d.ts files
+    "sourceMap": true,                           // Generate sourcemaps for debugging
+    "outDir": "./dist",                          // Where compiled files go
+
+    /* Skip type checking for libraries */
+    "skipLibCheck": true
+  },
+  "include": [
+    "src/**/*"                                   // Include all TypeScript files in src/
+  ],
+  "exclude": [
+    "node_modules",                              // Don't compile dependencies
+    "dist",                                      // Don't compile output
+    "build"                                      // Don't compile build artifacts
+  ]
+}

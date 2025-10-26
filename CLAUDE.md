@@ -1,0 +1,355 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Overview
+
+**Qreate** is an automated test/exam creator desktop application that streamlines the process of generating review exams from study materials using AI.
+
+### Core Functionality
+- Users upload study materials (PDF, DOCX, TXT, images with OCR)
+- Configure exam parameters (types, quantities, difficulty distribution)
+- AI (ChatGPT) generates customized exams
+- Exams are automatically formatted and exported to Google Docs and PDF
+- Project history management similar to chat history
+
+## Architecture
+
+### Technology Stack
+
+**Desktop Framework:**
+- Electron (recommended for cross-platform support) or Tauri (for lightweight alternative)
+
+**Backend:**
+- Node.js with Express OR Python with FastAPI
+- TypeScript for type safety
+
+**Database:**
+- SQLite for local storage
+- PostgreSQL for optional cloud sync
+
+**Frontend:**
+- React or Vue.js
+- State Management: Redux or Zustand (consider XState for workflow state machines)
+
+**Key Libraries:**
+- File Processing: pdf-parse, mammoth, Tesseract OCR
+- API Integration: OpenAI API, Google Drive API, Google Docs API
+- Authentication: OAuth 2.0
+- Background Jobs: BullMQ for task queue management
+- Validation: Zod for runtime validation
+- API Layer: tRPC for type-safe client-server communication
+
+**Testing:**
+- Jest for unit tests
+- Playwright for end-to-end tests (MCP server already installed)
+
+### MCP Servers Configured
+
+The following MCP servers are available for development:
+- **context7** - Context-aware development features
+- **playwright** - Browser automation for testing
+- **filesystem** - File operations
+- **sqlite** - Database management
+- **memory** - Persistent context storage
+- **fetch** - HTTP requests for APIs
+
+## Workflow Phases
+
+### Phase 1: User Onboarding & Setup
+1. **User Registration**
+   - Email + password authentication
+   - Email verification required
+   - Password requirements: min 8 chars, 1 uppercase, 1 number, 1 special char
+
+2. **ChatGPT Account Binding**
+   - Support API key OR OAuth authentication
+   - Validate connection with test prompt
+   - Store encrypted credentials securely
+   - Fallback: Browser automation (Selenium/Playwright) if API unavailable
+
+### Phase 2: Exam Configuration
+3. **File Upload**
+   - Max 5 files, 50MB per file, 200MB total
+   - Supported formats: PDF, DOCX, DOC, TXT, PNG, JPG
+   - Drag-and-drop interface
+   - Text extraction validation
+
+4. **Exam Type Selection**
+   - Multiple Choice, True/False, Fill in the Blanks, Short Answer, Essay, Matching, Identification
+   - Real-time total counter
+   - Validation: 10-200 total items
+
+5. **Difficulty Distribution**
+   - Very Easy, Easy, Moderate, Hard, Very Hard
+   - Must sum to total items exactly
+   - Visual progress bar with auto-distribute option
+
+6. **Review & Confirmation**
+   - Summary of all configurations
+   - Estimated processing time and API usage
+   - Final validation before generation
+
+### Phase 3: Exam Generation
+7. **ChatGPT Processing**
+   - Sequential file processing (avoid rate limits)
+   - Strict prompt engineering for consistent format
+   - Auto-retry on malformed responses (max 3 attempts)
+   - Live progress tracking
+
+8. **Content Validation & Storage**
+   - Parse exam structure
+   - Verify question counts
+   - Check for duplicates
+   - Store in temporary database
+
+### Phase 4: Document Creation
+9. **Google Docs Generation**
+   - Document naming: `Username_TaskXXX`
+   - Multi-exam: Use tabs or sections
+   - Preserve formatting with page breaks
+   - Answer key on separate page
+
+10. **PDF Export & Download**
+    - Export via Google Drive API
+    - ZIP folder for multiple files
+    - Store in `Projects/Project_[ID]/`
+
+### Phase 5: Project Management
+11. **Project Archival & History**
+    - SQLite database with project metadata
+    - Search, filter, sort capabilities
+    - Actions: view, re-download, duplicate, edit, regenerate, delete
+    - Optional cloud sync for multi-device access
+
+### Phase 6: Error Recovery & Edge Cases
+- Auto-retry with exponential backoff (max 3 attempts)
+- Save progress locally and resume on connection restore
+- Auto-save every action
+- "Restore last session" on app restart
+
+## Critical Prompt Engineering
+
+### ChatGPT Exam Format
+```
+SYSTEM ROLE: You are an expert exam creator. Generate ONLY the exam content with no introductory text, explanations, or suggestions.
+
+FORMAT REQUIREMENTS:
+General Topic: [Auto-extracted from content]
+----Exam Content----
+[Questions organized by type and difficulty]
+[PAGE BREAK]
+----Answer Key----
+[Answers only, on separate page]
+
+USER REQUEST:
+- Source Material: [File content]
+- Question Types: [List with quantities]
+- Difficulty: [Distribution breakdown]
+- Total Items: [Number]
+
+CRITICAL: Output ONLY exam content in the format above. No extra text.
+```
+
+## Key Design Principles
+
+### Foolproofing
+- Clear validation at every step with inline error messages
+- Disable "Next" button until valid configuration
+- Auto-save and recovery mechanisms
+- Transparent process with progress tracking
+- No data loss - auto-save every action
+
+### Error Handling
+- Network issues: Auto-retry, save progress, show offline mode
+- API failures: Queue requests, show service status
+- User errors: Undo button, confirmation dialogs, input validation
+- All errors show specific, actionable messages
+
+### State Management
+- Use XState for complex multi-step workflow
+- Implement proper state machines for phase transitions
+- Ensures resumability and error recovery
+
+### Real-time Updates
+- WebSockets for live progress tracking
+- Show file processing status, exam generation progress
+- Estimated time remaining
+
+## File Structure
+
+```
+Qreate/
+├── src/
+│   ├── main/           # Electron main process
+│   ├── renderer/       # Frontend React app
+│   ├── backend/        # API server (Express/FastAPI)
+│   ├── database/       # SQLite schemas and migrations
+│   ├── services/       # Business logic
+│   │   ├── chatgpt/    # OpenAI API integration
+│   │   ├── google/     # Google Drive/Docs API
+│   │   ├── fileProcessor/  # PDF, DOCX, OCR handling
+│   │   └── examValidator/  # Exam validation logic
+│   ├── utils/          # Shared utilities
+│   └── types/          # TypeScript type definitions
+├── Projects/           # User project storage
+├── tests/              # Jest unit tests
+├── e2e/                # Playwright end-to-end tests
+└── docs/               # Documentation
+```
+
+## Development Guidelines
+
+### Code Quality
+- Use TypeScript throughout
+- Implement comprehensive logging (Winston/Pino)
+- Use Zod for runtime validation of API responses
+- Follow error boundary patterns in React
+- Write unit tests for business logic
+- Write E2E tests for critical user flows
+
+### Performance
+- Process files sequentially to respect API rate limits
+- Use BullMQ for background job processing
+- Implement caching where appropriate
+- Optimize large file handling
+
+### Security
+- Never store API keys in plaintext
+- Encrypt sensitive credentials
+- Use OAuth 2.0 best practices
+- Sanitize file uploads
+- Validate all user inputs
+
+### User Experience
+- Provide presets: "Quick Quiz (20 items)", "Standard Exam (50 items)", "Comprehensive (100 items)"
+- Show recommended item counts per type
+- Visual feedback for all long-running operations
+- Tooltips and guided tutorials for first-time users
+- In-app help and FAQ
+
+## Success Criteria
+
+- User never loses progress (auto-save and recovery)
+- Clear validation at every step (no ambiguous errors)
+- Guaranteed output format (strict prompt engineering)
+- Handles all edge cases (file issues, API failures, network problems)
+- User can always access past work (project history)
+- Transparent process (progress tracking and status updates)
+- Flexible download options (multiple formats)
+- Easy to use (intuitive UI with helpful guidance)
+- Recoverable from any failure (retry, resume, restore)
+
+## Memory/Context Notes
+
+### Project Initialization
+- Repository initialized on 2025-10-26
+- Initial flow documented in `c:\Users\John Dio Lumacang\Downloads\Tech Projects.pdf`
+- Refined flow includes 6 major phases with comprehensive error handling
+- MCP servers configured: context7, playwright, filesystem, sqlite, memory, fetch
+
+### Project Goals & Philosophy
+**CRITICAL: This app must be complete and production-ready for deployment.**
+
+- **Efficiency**: Optimize for performance, minimize API calls, efficient file processing
+- **Modularity**: Build reusable components, clear separation of concerns, easy to maintain
+- **High Functionality**: Implement all features from the refined flow, robust error handling, excellent UX
+- **Production Quality**:
+  - Comprehensive testing (unit, integration, E2E)
+  - Proper error logging and monitoring
+  - Security best practices
+  - Professional UI/UX
+  - Documentation for users and developers
+
+### Development Approach
+**Educational & Transparent**: The developer is learning alongside implementation.
+
+For every implementation step, Claude should:
+1. **Explain the "Why"**: Rationale behind architectural and technical decisions
+2. **Explain the "What"**: What each piece of code/configuration does
+3. **Explain the "How"**: How components interact and work together
+4. **Show Alternatives**: Mention alternative approaches when relevant
+5. **Best Practices**: Highlight industry best practices being applied
+6. **Learning Resources**: Suggest docs or concepts to explore further
+
+This is a learning journey - take time to understand each step before moving forward.
+
+### Key Decisions
+- **Desktop Framework**: Electron ✅
+- **Backend**: Node.js + Fastify (TypeScript) ✅
+- **Frontend**: React + TypeScript ✅
+- **UI Library**: shadcn/ui (modern, customizable)
+- **State Management**: Zustand (global) + XState (workflows) ✅
+- **Database**: SQLite (better-sqlite3) ✅
+- **API Layer**: tRPC (type-safe communication) ✅
+- **Validation**: Zod ✅
+- **Testing**: Vitest + Playwright ✅
+- **Background Jobs**: BullMQ ✅
+- Focus on foolproof UX with extensive validation and error recovery
+- Project history stored locally in SQLite with optional cloud sync
+- **Production-ready**: Every component should be deployment-quality, not MVP/prototype
+- **Educational**: Deep explanations for learning, developer is new to React/TypeScript
+
+### Project Setup Status
+- ✅ Project initialized with Electron + React + TypeScript
+- ✅ Development tools configured (ESLint, Prettier)
+- ✅ Basic project structure created
+- ✅ Build system configured (electron-vite)
+- ✅ First successful test run completed
+
+### Next Steps
+- Install additional dependencies (Zustand, XState, Zod, tRPC, etc.)
+- Set up database layer with SQLite
+- Implement Phase 1: User authentication UI
+- Set up ChatGPT API integration
+- Create file upload system
+
+## Development Commands
+
+### Running the App
+```bash
+npm run dev          # Start development mode (hot reload)
+npm run build        # Build for production
+npm run preview      # Preview production build
+npm run package      # Create installer
+```
+
+### Code Quality
+```bash
+npm run typecheck    # Check TypeScript types
+npm run lint         # Check code quality with ESLint
+npm run format       # Format code with Prettier
+```
+
+## Project Structure (Current)
+
+```
+Qreate/
+├── src/
+│   ├── main/              # Electron main process (Node.js)
+│   │   └── index.ts       # Main process entry point
+│   ├── preload/           # Secure bridge between main and renderer
+│   │   └── index.ts       # Preload script (IPC API)
+│   ├── renderer/          # React application
+│   │   ├── index.html     # HTML entry point
+│   │   └── src/
+│   │       ├── main.tsx   # React entry point
+│   │       ├── App.tsx    # Root component
+│   │       ├── index.css  # Global styles
+│   │       ├── components/  # UI components (to be added)
+│   │       ├── hooks/       # Custom React hooks (to be added)
+│   │       └── store/       # State management (to be added)
+│   └── shared/            # Code shared between main and renderer
+│       ├── types/         # TypeScript definitions
+│       │   └── electron.d.ts  # Window.electron types
+│       └── utils/         # Utility functions (to be added)
+├── .vscode/               # VS Code settings
+├── dist/                  # Build output (git-ignored)
+├── node_modules/          # Dependencies (git-ignored)
+├── .eslintrc.json         # ESLint configuration
+├── .prettierrc.json       # Prettier configuration
+├── .gitignore             # Git ignore rules
+├── electron.vite.config.ts  # Build configuration
+├── package.json           # Project metadata and scripts
+└── tsconfig.json          # TypeScript configuration
+```
