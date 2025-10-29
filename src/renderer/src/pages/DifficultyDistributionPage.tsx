@@ -58,9 +58,8 @@ export function DifficultyDistributionPage() {
   const handleNext = () => {
     if (!isValid) return
 
-    // TODO: Navigate to Review & Confirmation page
-    // For now, just show alert
-    alert('Next: Review & Confirmation (Phase 2, Step 4 - not yet implemented)')
+    // Navigate to Review & Confirmation page
+    navigate('/create-exam/review')
   }
 
   return (

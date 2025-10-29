@@ -9,7 +9,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Core Functionality
 - Users upload study materials (PDF, DOCX, TXT, images with OCR)
 - Configure exam parameters (types, quantities, difficulty distribution)
-- AI (ChatGPT) generates customized exams
+- AI (Google Gemini, OpenAI, Anthropic Claude, or Ollama) generates customized exams
+- Multi-provider support allows users to choose based on cost, quality, and privacy
 - Exams are automatically formatted and exported to Google Docs and PDF
 - Project history management similar to chat history
 
@@ -34,7 +35,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Key Libraries:**
 - File Processing: pdf-parse, mammoth, Tesseract OCR
-- API Integration: OpenAI API, Google Drive API, Google Docs API
+- AI Provider APIs:
+  - Google Gemini API (@google/generative-ai) - FREE, recommended
+  - OpenAI API (openai) - PAID, high quality
+  - Anthropic Claude API - PAID, advanced reasoning
+  - Ollama - FREE, local, privacy-focused
+- API Integration: Google Drive API, Google Docs API
 - Authentication: OAuth 2.0
 - Background Jobs: BullMQ for task queue management
 - Validation: Zod for runtime validation
@@ -62,11 +68,13 @@ The following MCP servers are available for development:
    - Email verification required
    - Password requirements: min 8 chars, 1 uppercase, 1 number, 1 special char
 
-2. **ChatGPT Account Binding**
-   - Support API key OR OAuth authentication
-   - Validate connection with test prompt
-   - Store encrypted credentials securely
-   - Fallback: Browser automation (Selenium/Playwright) if API unavailable
+2. **AI Provider Selection & Setup**
+   - Multi-provider support: Gemini (FREE), OpenAI (PAID), Anthropic (PAID), Ollama (LOCAL)
+   - Beautiful provider selection UI with clear cost/feature indicators
+   - API key validation with real connection testing
+   - Provider-specific setup instructions
+   - Stored credentials encrypted in local storage
+   - Default provider: Google Gemini (free, no credit card required)
 
 ### Phase 2: Exam Configuration
 3. **File Upload**
@@ -91,11 +99,13 @@ The following MCP servers are available for development:
    - Final validation before generation
 
 ### Phase 3: Exam Generation
-7. **ChatGPT Processing**
+7. **AI Provider Processing**
+   - Uses selected AI provider (Gemini, OpenAI, Anthropic, or Ollama)
    - Sequential file processing (avoid rate limits)
-   - Strict prompt engineering for consistent format
+   - Strict prompt engineering for consistent format (provider-agnostic)
    - Auto-retry on malformed responses (max 3 attempts)
    - Live progress tracking
+   - Provider-specific error handling and rate limit management
 
 8. **Content Validation & Storage**
    - Parse exam structure
@@ -130,7 +140,9 @@ The following MCP servers are available for development:
 
 ## Critical Prompt Engineering
 
-### ChatGPT Exam Format
+### AI Provider Exam Generation Format
+**Note:** This prompt format is provider-agnostic and works with all supported AI providers (Gemini, OpenAI, Anthropic, Ollama)
+
 ```
 SYSTEM ROLE: You are an expert exam creator. Generate ONLY the exam content with no introductory text, explanations, or suggestions.
 
@@ -150,6 +162,14 @@ USER REQUEST:
 
 CRITICAL: Output ONLY exam content in the format above. No extra text.
 ```
+
+**Provider-Specific Implementation:**
+- **Gemini:** Uses `gemini-2.5-flash` model with temperature 0.7
+- **OpenAI:** Uses `gpt-4o-mini` model with temperature 0.7
+- **Anthropic:** (To be implemented) Uses Claude with similar parameters
+- **Ollama:** (To be implemented) Uses local models with custom parameters
+
+**See:** `src/renderer/src/services/ai-providers/` for actual implementations
 
 ## Key Design Principles
 
@@ -301,42 +321,100 @@ This is a learning journey - take time to understand each step before moving for
 - ✅ Styling configured (Tailwind CSS v3)
 
 ### Phase 1: User Onboarding & Setup (COMPLETED ✅)
-**Commit:** fd0d37a - "feat: Implement Phase 1 authentication and API key management"
+**Commits:**
+- fd0d37a - "feat: Implement Phase 1 authentication and API key management"
+- 6fb415f - "feat: Implement multi-LLM provider support with Gemini 2.5 Flash"
 
 **Completed Features:**
 - ✅ User authentication (Login/Signup pages with routing)
 - ✅ Password validation (min 8 chars, 1 uppercase, 1 number, 1 special char)
 - ✅ Real-time password requirements checker with visual feedback
 - ✅ Protected routes (redirect to login if not authenticated)
-- ✅ Settings page for OpenAI API key binding
-- ✅ API key validation flow (mock validation, ready for OpenAI integration)
-- ✅ API credentials storage in Zustand store
-- ✅ Connection status tracking (chatgptConnected boolean)
+- ✅ **Multi-LLM Provider Support**
+  - Google Gemini 2.5 Flash (FREE, recommended)
+  - OpenAI GPT-4o-mini (PAID)
+  - Anthropic Claude (UI ready, implementation pending)
+  - Ollama (UI ready, implementation pending)
+- ✅ Beautiful provider selection UI with badges and indicators
+- ✅ Real API connection testing (Gemini and OpenAI working)
+- ✅ Provider-specific setup instructions
+- ✅ API credentials storage per provider in Zustand store
+- ✅ Connection status tracking
 - ✅ Onboarding banner on HomePage prompting API key setup
 - ✅ Settings and Logout buttons in header
 - ✅ React Router for navigation
-- ✅ OpenAI SDK installed
+- ✅ AI Provider SDKs installed (@google/generative-ai, openai)
 
 **What's Working:**
 - Complete auth flow: signup → login → home → settings → logout
 - Password requirements checker shows green checkmarks as user types
-- API key input with loading/success/error states
+- Multi-provider selection with visual cards
+- Real API validation with actual connection tests
 - Protected routing prevents access without authentication
-- API key disconnect functionality
+- Provider switching and disconnect functionality
+- Default to free Gemini provider
 
 **Still Needed for Production:**
-- Real OpenAI API validation (replace mock with actual API test)
+- Implement Anthropic Claude provider
+- Implement Ollama local provider
 - Encryption for API credentials (use electron-store with encryption)
 - Email verification for signups
 - Backend API for actual user registration/authentication
 - Google Drive OAuth connection
 
-### Next Steps: Phase 2 - Exam Configuration
-- File upload system (drag-and-drop, validation)
-- Text extraction (PDF, DOCX, TXT, images with OCR)
-- Exam type selection interface
-- Difficulty distribution controls
-- Review and confirmation screens
+### Phase 2: Exam Configuration (COMPLETED ✅)
+**Commits:**
+- c78c80f - "feat: Implement Phase 2 file upload and exam type selection"
+- d1f3d24 - "feat: Implement Phase 2 Step 3 - Difficulty Distribution"
+- (Current) - "feat: Implement Phase 2 Step 4 - Review & Confirmation"
+
+**Completed Features:**
+- ✅ **File Upload System** (Step 1)
+  - Drag-and-drop interface
+  - File validation (PDF, DOCX, TXT, PNG, JPG)
+  - Max 5 files, 50MB per file, 200MB total
+  - Real-time validation with status indicators
+  - File management (remove files)
+- ✅ **Exam Type Selection** (Step 2)
+  - 7 question types (Multiple Choice, True/False, etc.)
+  - Quick presets (Quick Quiz, Standard Exam, Comprehensive)
+  - Real-time total counter with validation
+  - Min 10, max 200 questions
+  - Smart input UX (text selection, local state pattern)
+- ✅ **Difficulty Distribution** (Step 3)
+  - 5 difficulty levels (Very Easy → Very Hard)
+  - Range sliders + number inputs with +/- buttons
+  - Auto-distribute button (20-20-30-20-10 default)
+  - Visual progress bar with color coding
+  - Real-time validation (must sum to total)
+  - Percentage display
+- ✅ **Review & Confirmation** (Step 4)
+  - Comprehensive configuration summary
+  - Edit buttons for each section
+  - AI provider info and connection status
+  - Estimated processing time
+  - Estimated cost (Free for Gemini)
+  - Final validation before generation
+  - Generate Exam button (ready for Phase 3)
+
+**What's Working:**
+- Complete Phase 2 workflow: upload → types → difficulty → review
+- Workflow validation (redirects if steps skipped)
+- Beautiful, intuitive UI with progress tracking (0% → 25% → 50% → 75% → 100%)
+- Real-time validation at every step
+- Foolproof UX (disabled buttons until valid)
+- Smooth input handling (text selection, no "0" flash)
+
+**Still Needed for Production:**
+- Text extraction from uploaded files (PDF, DOCX, OCR)
+- Actual file processing pipeline
+
+### Next Steps: Phase 3 - Exam Generation
+- AI provider integration for exam generation
+- Sequential file processing
+- Progress tracking with live updates
+- Content validation and parsing
+- Error handling and retry logic
 
 ## Development Commands
 
