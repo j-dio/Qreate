@@ -10,6 +10,7 @@
  * - /settings - Settings page (protected)
  * - /create-exam - File upload (protected)
  * - /create-exam/types - Exam type selection (protected)
+ * - /create-exam/difficulty - Difficulty distribution (protected)
  *
  * Protected Routes:
  * If user is not authenticated, they are redirected to /login
@@ -23,6 +24,7 @@ import { SignupPage } from './pages/SignupPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { FileUploadPage } from './pages/FileUploadPage'
 import { ExamTypeSelectionPage } from './pages/ExamTypeSelectionPage'
+import { DifficultyDistributionPage } from './pages/DifficultyDistributionPage'
 import { useAppStore } from './store/useAppStore'
 
 /**
@@ -109,6 +111,14 @@ function App() {
           element={
             <ProtectedRoute>
               <ExamTypeSelectionPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/create-exam/difficulty"
+          element={
+            <ProtectedRoute>
+              <DifficultyDistributionPage />
             </ProtectedRoute>
           }
         />

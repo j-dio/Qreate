@@ -56,9 +56,8 @@ export function ExamTypeSelectionPage() {
   const handleNext = () => {
     if (!canProceed) return
 
-    // TODO: Navigate to difficulty distribution page
-    // navigate('/create-exam/difficulty')
-    alert('Next: Difficulty Distribution (Coming soon!)')
+    // Navigate to difficulty distribution page
+    navigate('/create-exam/difficulty')
   }
 
   /**
