@@ -16,7 +16,7 @@
  */
 
 import { useNavigate } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { ArrowLeft, Sparkles, AlertCircle } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
@@ -28,7 +28,6 @@ import { AI_PROVIDERS } from '../types/ai-providers'
 
 export function ReviewConfirmationPage() {
   const navigate = useNavigate()
-  const [isGenerating, setIsGenerating] = useState(false)
 
   // Get state from stores
   const uploadedFiles = useFileUploadStore((state) => state.uploadedFiles)
@@ -85,14 +84,9 @@ export function ReviewConfirmationPage() {
       return
     }
 
-    setIsGenerating(true)
-
-    // TODO: Phase 3 - Exam Generation
-    // This will trigger the AI generation process
-    setTimeout(() => {
-      alert('Phase 3: Exam Generation (not yet implemented)')
-      setIsGenerating(false)
-    }, 1500)
+    // Navigate to generation progress page
+    // The progress page will automatically start generation
+    navigate('/create-exam/generate')
   }
 
   return (
@@ -206,20 +200,11 @@ export function ReviewConfirmationPage() {
 
         <Button
           onClick={handleGenerate}
-          disabled={isGenerating || !isAIConnected}
+          disabled={!isAIConnected}
           className="flex items-center gap-2"
         >
-          {isGenerating ? (
-            <>
-              <Sparkles className="h-4 w-4 animate-spin" />
-              Generating...
-            </>
-          ) : (
-            <>
-              <Sparkles className="h-4 w-4" />
-              Generate Exam
-            </>
-          )}
+          <Sparkles className="h-4 w-4" />
+          Generate Exam
         </Button>
       </div>
     </div>
