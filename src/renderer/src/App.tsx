@@ -7,6 +7,9 @@
  * - /login - Login page (public)
  * - /signup - Signup page (public)
  * - / - Home page (protected, requires authentication)
+ * - /settings - Settings page (protected)
+ * - /create-exam - File upload (protected)
+ * - /create-exam/types - Exam type selection (protected)
  *
  * Protected Routes:
  * If user is not authenticated, they are redirected to /login
@@ -18,6 +21,8 @@ import { HomePage } from './pages/HomePage'
 import { LoginPage } from './pages/LoginPage'
 import { SignupPage } from './pages/SignupPage'
 import { SettingsPage } from './pages/SettingsPage'
+import { FileUploadPage } from './pages/FileUploadPage'
+import { ExamTypeSelectionPage } from './pages/ExamTypeSelectionPage'
 import { useAppStore } from './store/useAppStore'
 
 /**
@@ -88,6 +93,22 @@ function App() {
           element={
             <ProtectedRoute>
               <SettingsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/create-exam"
+          element={
+            <ProtectedRoute>
+              <FileUploadPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/create-exam/types"
+          element={
+            <ProtectedRoute>
+              <ExamTypeSelectionPage />
             </ProtectedRoute>
           }
         />

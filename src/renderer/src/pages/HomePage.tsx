@@ -71,7 +71,25 @@ export function HomePage() {
               Upload your study materials and generate custom exams
             </p>
           </div>
-          <Button size="lg" className="gap-2">
+          <Button
+            size="lg"
+            className="gap-2"
+            onClick={() => {
+              if (needsApiKeySetup) {
+                // Warn user they need to connect API key first
+                if (
+                  confirm(
+                    'You need to connect your OpenAI API key before creating exams. Go to Settings now?'
+                  )
+                ) {
+                  navigate('/settings')
+                }
+              } else {
+                // Navigate to file upload page
+                navigate('/create-exam')
+              }
+            }}
+          >
             <Plus className="h-4 w-4" />
             New Exam
           </Button>
