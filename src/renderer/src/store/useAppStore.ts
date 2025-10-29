@@ -25,8 +25,19 @@ export interface User {
   id: string
   email: string
   name: string
+  createdAt: string
   chatgptConnected: boolean
   googleDriveConnected: boolean
+}
+
+/**
+ * API Credentials interface
+ * Stores encrypted API keys and tokens
+ * NOTE: In production, these should be encrypted before storage
+ */
+export interface ApiCredentials {
+  openaiApiKey: string | null
+  googleDriveToken: string | null
 }
 
 /**
@@ -65,13 +76,16 @@ interface AppState {
   user: User | null
   projects: Project[]
   settings: AppSettings
+  apiCredentials: ApiCredentials
 
   // Actions (functions that modify state)
   setUser: (user: User | null) => void
+  updateUser: (updates: Partial<User>) => void
   addProject: (project: Project) => void
   updateProject: (id: string, updates: Partial<Project>) => void
   deleteProject: (id: string) => void
   updateSettings: (settings: Partial<AppSettings>) => void
+  setApiCredentials: (credentials: Partial<ApiCredentials>) => void
 }
 
 /**
@@ -95,10 +109,18 @@ export const useAppStore = create<AppState>()(
           veryHard: 10,
         },
       },
+      apiCredentials: {
+        openaiApiKey: null,
+        googleDriveToken: null,
+      },
 
       // Actions
-      setUser: (user) =>
-        set({ user }),
+      setUser: (user) => set({ user }),
+
+      updateUser: (updates) =>
+        set((state) => ({
+          user: state.user ? { ...state.user, ...updates } : null,
+        })),
 
       addProject: (project) =>
         set((state) => ({
@@ -107,9 +129,7 @@ export const useAppStore = create<AppState>()(
 
       updateProject: (id, updates) =>
         set((state) => ({
-          projects: state.projects.map((p) =>
-            p.id === id ? { ...p, ...updates } : p
-          ),
+          projects: state.projects.map((p) => (p.id === id ? { ...p, ...updates } : p)),
         })),
 
       deleteProject: (id) =>
@@ -120,6 +140,11 @@ export const useAppStore = create<AppState>()(
       updateSettings: (settings) =>
         set((state) => ({
           settings: { ...state.settings, ...settings },
+        })),
+
+      setApiCredentials: (credentials) =>
+        set((state) => ({
+          apiCredentials: { ...state.apiCredentials, ...credentials },
         })),
     }),
     {

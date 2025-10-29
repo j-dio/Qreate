@@ -14,8 +14,10 @@
  * └─────────────────────────────────┘
  */
 
-import { FileText } from 'lucide-react'
+import { FileText, LogOut, Settings } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { useAppStore } from '../../store/useAppStore'
+import { Button } from '../ui/Button'
 
 interface AppLayoutProps {
   children: React.ReactNode
@@ -23,6 +25,15 @@ interface AppLayoutProps {
 
 export function AppLayout({ children }: AppLayoutProps) {
   const user = useAppStore((state) => state.user)
+  const setUser = useAppStore((state) => state.setUser)
+  const navigate = useNavigate()
+
+  const handleLogout = () => {
+    // Clear user from store
+    setUser(null)
+    // Navigate to login page
+    navigate('/login')
+  }
 
   return (
     <div className="flex h-screen flex-col bg-background">
@@ -38,13 +49,30 @@ export function AppLayout({ children }: AppLayoutProps) {
           {/* Spacer */}
           <div className="flex-1" />
 
-          {/* User info (placeholder for now) */}
+          {/* User info and actions */}
           <div className="flex items-center gap-4">
             {user ? (
-              <div className="text-sm">
-                <p className="font-medium">{user.name}</p>
-                <p className="text-xs text-muted-foreground">{user.email}</p>
-              </div>
+              <>
+                <div className="text-sm">
+                  <p className="font-medium">{user.name}</p>
+                  <p className="text-xs text-muted-foreground">{user.email}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => navigate('/settings')}
+                    className="gap-2"
+                  >
+                    <Settings className="h-4 w-4" />
+                    Settings
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={handleLogout} className="gap-2">
+                    <LogOut className="h-4 w-4" />
+                    Logout
+                  </Button>
+                </div>
+              </>
             ) : (
               <p className="text-sm text-muted-foreground">Not logged in</p>
             )}

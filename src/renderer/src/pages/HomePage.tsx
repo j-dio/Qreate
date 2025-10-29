@@ -9,12 +9,14 @@
  * - Project statistics
  */
 
-import { Plus, FileText, Clock, CheckCircle2 } from 'lucide-react'
+import { Plus, FileText, Clock, CheckCircle2, AlertCircle } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { useAppStore } from '../store/useAppStore'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
 
 export function HomePage() {
+  const navigate = useNavigate()
   const projects = useAppStore((state) => state.projects)
   const user = useAppStore((state) => state.user)
 
@@ -24,6 +26,8 @@ export function HomePage() {
     completed: projects.filter((p) => p.status === 'completed').length,
     inProgress: projects.filter((p) => p.status === 'processing').length,
   }
+
+  const needsApiKeySetup = !user?.chatgptConnected
 
   return (
     <div className="space-y-8">
@@ -36,6 +40,27 @@ export function HomePage() {
           Create AI-powered exams from your study materials
         </p>
       </div>
+
+      {/* API Key Setup Banner */}
+      {needsApiKeySetup && (
+        <Card className="border-blue-200 bg-blue-50">
+          <CardContent className="flex items-center justify-between p-6">
+            <div className="flex items-start gap-4">
+              <AlertCircle className="h-6 w-6 text-blue-600" />
+              <div>
+                <h3 className="text-lg font-semibold text-blue-900">
+                  Connect your OpenAI API Key
+                </h3>
+                <p className="text-sm text-blue-700">
+                  To start generating exams, you need to connect your OpenAI API key. This allows
+                  Qreate to use ChatGPT to create custom exams from your materials.
+                </p>
+              </div>
+            </div>
+            <Button onClick={() => navigate('/settings')}>Connect Now</Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Quick Action */}
       <Card className="border-dashed">
