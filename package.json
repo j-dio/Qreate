@@ -24,6 +24,7 @@
   },
   "homepage": "https://github.com/j-dio/Qreate#readme",
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@xstate/react": "^6.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

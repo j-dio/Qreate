@@ -16,6 +16,7 @@
 
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
+import type { AIProviderType } from '../types/ai-providers'
 
 /**
  * User interface
@@ -26,17 +27,25 @@ export interface User {
   email: string
   name: string
   createdAt: string
-  chatgptConnected: boolean
+  chatgptConnected: boolean // Legacy field, kept for compatibility
   googleDriveConnected: boolean
+  aiProvider?: AIProviderType // Currently selected AI provider
+  aiConnected: boolean // Whether AI is connected (replaces chatgptConnected)
 }
 
 /**
  * API Credentials interface
- * Stores encrypted API keys and tokens
+ * Stores API keys for multiple providers
  * NOTE: In production, these should be encrypted before storage
  */
 export interface ApiCredentials {
+  // AI Provider API Keys (stored per provider)
   openaiApiKey: string | null
+  geminiApiKey: string | null
+  anthropicApiKey: string | null
+  ollamaUrl: string | null
+
+  // Other service credentials
   googleDriveToken: string | null
 }
 
@@ -77,6 +86,7 @@ interface AppState {
   projects: Project[]
   settings: AppSettings
   apiCredentials: ApiCredentials
+  selectedAIProvider: AIProviderType // Currently selected AI provider
 
   // Actions (functions that modify state)
   setUser: (user: User | null) => void
@@ -86,6 +96,8 @@ interface AppState {
   deleteProject: (id: string) => void
   updateSettings: (settings: Partial<AppSettings>) => void
   setApiCredentials: (credentials: Partial<ApiCredentials>) => void
+  setAIProvider: (provider: AIProviderType) => void // Set selected provider
+  getAIProviderKey: () => string | null // Get API key for current provider
 }
 
 /**
@@ -95,7 +107,7 @@ interface AppState {
  */
 export const useAppStore = create<AppState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       // Initial state
       user: null,
       projects: [],
@@ -111,8 +123,12 @@ export const useAppStore = create<AppState>()(
       },
       apiCredentials: {
         openaiApiKey: null,
+        geminiApiKey: null,
+        anthropicApiKey: null,
+        ollamaUrl: 'http://localhost:11434', // Default Ollama URL
         googleDriveToken: null,
       },
+      selectedAIProvider: 'gemini', // Default to free provider
 
       // Actions
       setUser: (user) => set({ user }),
@@ -146,6 +162,29 @@ export const useAppStore = create<AppState>()(
         set((state) => ({
           apiCredentials: { ...state.apiCredentials, ...credentials },
         })),
+
+      setAIProvider: (provider) =>
+        set({
+          selectedAIProvider: provider,
+        }),
+
+      getAIProviderKey: () => {
+        const state = get()
+        const provider = state.selectedAIProvider
+
+        switch (provider) {
+          case 'openai':
+            return state.apiCredentials.openaiApiKey
+          case 'gemini':
+            return state.apiCredentials.geminiApiKey
+          case 'anthropic':
+            return state.apiCredentials.anthropicApiKey
+          case 'ollama':
+            return state.apiCredentials.ollamaUrl
+          default:
+            return null
+        }
+      },
     }),
     {
       name: 'qreate-storage', // localStorage key

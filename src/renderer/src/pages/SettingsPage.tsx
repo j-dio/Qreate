@@ -1,17 +1,35 @@
 /**
- * Settings Page Component
+ * Settings Page - Multi-Provider AI Setup
  *
- * Allows users to manage their API credentials and app settings.
+ * Redesigned to support multiple AI providers with excellent UX.
  *
  * Features:
- * - OpenAI API key binding with validation
- * - Google Drive connection management
- * - App preferences
+ * - Provider selection (Gemini, OpenAI, Anthropic, Ollama)
+ * - Clear visual indicators (FREE, PAID, RECOMMENDED badges)
+ * - Provider-specific instructions and setup
+ * - Connection testing with real API calls
+ * - Beautiful, intuitive interface
+ *
+ * UX Principles:
+ * - Make free option obvious and easy
+ * - Show clear cost information
+ * - Provider cards with visual hierarchy
+ * - Inline help and instructions
+ * - Real-time validation feedback
  */
 
 import { useState, FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Key, CheckCircle2, XCircle, Loader2, ExternalLink } from 'lucide-react'
+import {
+  CheckCircle2,
+  XCircle,
+  Loader2,
+  ExternalLink,
+  Sparkles,
+  DollarSign,
+  Shield,
+  Zap,
+} from 'lucide-react'
 import { Input } from '../components/ui/Input'
 import { Button } from '../components/ui/Button'
 import {
@@ -23,35 +41,68 @@ import {
   CardFooter,
 } from '../components/ui/Card'
 import { useAppStore } from '../store/useAppStore'
+import {
+  AI_PROVIDERS,
+  AIProviderFactory,
+  type AIProviderType,
+} from '../services/ai-providers'
 
 export function SettingsPage() {
   const navigate = useNavigate()
+
+  // Store state
   const user = useAppStore((state) => state.user)
   const apiCredentials = useAppStore((state) => state.apiCredentials)
+  const selectedAIProvider = useAppStore((state) => state.selectedAIProvider)
   const setApiCredentials = useAppStore((state) => state.setApiCredentials)
+  const setAIProvider = useAppStore((state) => state.setAIProvider)
   const updateUser = useAppStore((state) => state.updateUser)
 
-  const [apiKey, setApiKey] = useState(apiCredentials.openaiApiKey || '')
+  // Local state
+  const [apiKey, setApiKey] = useState('')
   const [isValidating, setIsValidating] = useState(false)
   const [validationStatus, setValidationStatus] = useState<'idle' | 'success' | 'error'>('idle')
   const [errorMessage, setErrorMessage] = useState('')
 
-  const validateApiKey = async (key: string): Promise<boolean> => {
-    try {
-      // TODO: Replace with actual OpenAI API validation
-      // For now, we'll simulate validation
-      await new Promise((resolve) => setTimeout(resolve, 1500))
+  // Get current provider config
+  const currentProvider = AI_PROVIDERS[selectedAIProvider]
 
-      // Mock validation: check if key looks like an OpenAI key
-      if (key.startsWith('sk-') && key.length > 20) {
-        return true
-      }
-      throw new Error('Invalid API key format. OpenAI keys start with "sk-"')
-    } catch (error) {
-      throw error
+  // Check if current provider is connected
+  const isConnected = Boolean(
+    (selectedAIProvider === 'gemini' && apiCredentials.geminiApiKey) ||
+      (selectedAIProvider === 'openai' && apiCredentials.openaiApiKey) ||
+      (selectedAIProvider === 'anthropic' && apiCredentials.anthropicApiKey) ||
+      (selectedAIProvider === 'ollama' && apiCredentials.ollamaUrl)
+  )
+
+  /**
+   * Handle provider selection
+   */
+  const handleProviderChange = (provider: AIProviderType) => {
+    setAIProvider(provider)
+    setValidationStatus('idle')
+    setErrorMessage('')
+
+    // Load existing API key for this provider
+    switch (provider) {
+      case 'gemini':
+        setApiKey(apiCredentials.geminiApiKey || '')
+        break
+      case 'openai':
+        setApiKey(apiCredentials.openaiApiKey || '')
+        break
+      case 'anthropic':
+        setApiKey(apiCredentials.anthropicApiKey || '')
+        break
+      case 'ollama':
+        setApiKey(apiCredentials.ollamaUrl || 'http://localhost:11434')
+        break
     }
   }
 
+  /**
+   * Test connection with selected provider
+   */
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
 
@@ -65,14 +116,35 @@ export function SettingsPage() {
     setErrorMessage('')
 
     try {
-      const isValid = await validateApiKey(apiKey)
+      // Get the provider instance
+      const provider = AIProviderFactory.getProvider(selectedAIProvider)
 
-      if (isValid) {
-        // Save API key to store
-        setApiCredentials({ openaiApiKey: apiKey })
+      // Test the connection
+      const result = await provider.testConnection(apiKey)
+
+      if (result.success) {
+        // Save API key based on provider
+        switch (selectedAIProvider) {
+          case 'gemini':
+            setApiCredentials({ geminiApiKey: apiKey })
+            break
+          case 'openai':
+            setApiCredentials({ openaiApiKey: apiKey })
+            break
+          case 'anthropic':
+            setApiCredentials({ anthropicApiKey: apiKey })
+            break
+          case 'ollama':
+            setApiCredentials({ ollamaUrl: apiKey })
+            break
+        }
 
         // Update user connection status
-        updateUser({ chatgptConnected: true })
+        updateUser({
+          aiProvider: selectedAIProvider,
+          aiConnected: true,
+          chatgptConnected: true, // Legacy field
+        })
 
         setValidationStatus('success')
 
@@ -80,6 +152,8 @@ export function SettingsPage() {
         setTimeout(() => {
           navigate('/')
         }, 1500)
+      } else {
+        throw new Error(result.message)
       }
     } catch (error) {
       setValidationStatus('error')
@@ -89,58 +163,172 @@ export function SettingsPage() {
     }
   }
 
+  /**
+   * Disconnect current provider
+   */
   const handleDisconnect = () => {
-    setApiCredentials({ openaiApiKey: null })
-    updateUser({ chatgptConnected: false })
+    switch (selectedAIProvider) {
+      case 'gemini':
+        setApiCredentials({ geminiApiKey: null })
+        break
+      case 'openai':
+        setApiCredentials({ openaiApiKey: null })
+        break
+      case 'anthropic':
+        setApiCredentials({ anthropicApiKey: null })
+        break
+      case 'ollama':
+        setApiCredentials({ ollamaUrl: null })
+        break
+    }
+
+    updateUser({ aiConnected: false, chatgptConnected: false })
     setApiKey('')
     setValidationStatus('idle')
   }
 
-  const isConnected = user?.chatgptConnected && apiCredentials.openaiApiKey
+  /**
+   * Get provider-specific icon
+   */
+  const getProviderIcon = (provider: AIProviderType) => {
+    switch (provider) {
+      case 'gemini':
+        return <Sparkles className="h-5 w-5" />
+      case 'openai':
+        return <Zap className="h-5 w-5" />
+      case 'anthropic':
+        return <Shield className="h-5 w-5" />
+      case 'ollama':
+        return <Shield className="h-5 w-5" />
+    }
+  }
 
   return (
     <div className="space-y-8">
       {/* Page Header */}
       <div>
-        <h2 className="text-3xl font-bold tracking-tight">Settings</h2>
-        <p className="text-muted-foreground">Manage your API connections and preferences</p>
+        <h2 className="text-3xl font-bold tracking-tight">AI Provider Settings</h2>
+        <p className="text-muted-foreground">Choose and configure your AI provider for exam generation</p>
       </div>
 
-      {/* OpenAI API Key */}
+      {/* Provider Selection */}
+      <div>
+        <h3 className="text-lg font-semibold mb-4">Choose Your AI Provider</h3>
+        <div className="grid gap-4 md:grid-cols-2">
+          {(Object.keys(AI_PROVIDERS) as AIProviderType[]).map((providerId) => {
+            const provider = AI_PROVIDERS[providerId]
+            const isSelected = selectedAIProvider === providerId
+            const isThisConnected =
+              (providerId === 'gemini' && apiCredentials.geminiApiKey) ||
+              (providerId === 'openai' && apiCredentials.openaiApiKey) ||
+              (providerId === 'anthropic' && apiCredentials.anthropicApiKey) ||
+              (providerId === 'ollama' && apiCredentials.ollamaUrl)
+
+            return (
+              <Card
+                key={providerId}
+                className={`cursor-pointer transition-all ${
+                  isSelected
+                    ? 'border-blue-500 bg-blue-50 shadow-md'
+                    : 'hover:border-gray-400 hover:shadow'
+                }`}
+                onClick={() => handleProviderChange(providerId)}
+              >
+                <CardContent className="p-6">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start gap-3">
+                      {/* Icon */}
+                      <div
+                        className={`p-2 rounded ${isSelected ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'}`}
+                      >
+                        {getProviderIcon(providerId)}
+                      </div>
+
+                      {/* Provider Info */}
+                      <div className="flex-1">
+                        <h4 className="font-semibold">{provider.name}</h4>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {provider.description}
+                        </p>
+
+                        {/* Features */}
+                        <div className="flex flex-wrap gap-2 mt-3">
+                          {provider.features.isFree && (
+                            <span className="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded">
+                              FREE
+                            </span>
+                          )}
+                          {provider.features.isRecommended && (
+                            <span className="px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded">
+                              RECOMMENDED
+                            </span>
+                          )}
+                          {!provider.features.isFree && (
+                            <span className="px-2 py-0.5 text-xs font-medium bg-orange-100 text-orange-700 rounded">
+                              {provider.pricing.label}
+                            </span>
+                          )}
+                          {provider.features.isLocal && (
+                            <span className="px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-700 rounded">
+                              LOCAL
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Pricing */}
+                        <p className="text-xs text-muted-foreground mt-2">
+                          {provider.pricing.details}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Radio indicator */}
+                    <div
+                      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                        isSelected ? 'border-blue-600' : 'border-gray-300'
+                      }`}
+                    >
+                      {isSelected && <div className="w-3 h-3 rounded-full bg-blue-600" />}
+                    </div>
+                  </div>
+
+                  {/* Connection status */}
+                  {isThisConnected && (
+                    <div className="flex items-center gap-2 mt-3 text-green-600 text-sm">
+                      <CheckCircle2 className="h-4 w-4" />
+                      <span>Connected</span>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* API Key Configuration for Selected Provider */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Key className="h-5 w-5" />
-                OpenAI API Key
-              </CardTitle>
-              <CardDescription>
-                Connect your OpenAI API key to generate exams with ChatGPT
-              </CardDescription>
-            </div>
-            {isConnected && (
-              <div className="flex items-center gap-2 text-green-600">
-                <CheckCircle2 className="h-5 w-5" />
-                <span className="text-sm font-medium">Connected</span>
-              </div>
-            )}
-          </div>
+          <CardTitle className="flex items-center gap-2">
+            {getProviderIcon(selectedAIProvider)}
+            Configure {currentProvider.name}
+          </CardTitle>
+          <CardDescription>{currentProvider.setup.instructions}</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* API Key Input */}
             <Input
-              label="API Key"
-              type="password"
-              placeholder="sk-..."
+              label={currentProvider.setup.apiKeyLabel}
+              type={selectedAIProvider === 'ollama' ? 'text' : 'password'}
+              placeholder={currentProvider.setup.apiKeyPlaceholder}
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               error={errorMessage}
               disabled={isValidating || isConnected}
               helperText={
                 !isConnected
-                  ? "Get your API key from OpenAI's platform"
+                  ? `Get your ${currentProvider.name} API key from their platform`
                   : 'Your API key is securely stored'
               }
             />
@@ -149,7 +337,7 @@ export function SettingsPage() {
             {validationStatus === 'success' && (
               <div className="flex items-center gap-2 rounded-md bg-green-50 p-3 text-sm text-green-700">
                 <CheckCircle2 className="h-4 w-4" />
-                <span>API key validated successfully! Redirecting...</span>
+                <span>Connected successfully! Redirecting...</span>
               </div>
             )}
 
@@ -160,15 +348,15 @@ export function SettingsPage() {
               </div>
             )}
 
-            {/* How to get API key link */}
+            {/* Get API key link */}
             {!isConnected && (
               <a
-                href="https://platform.openai.com/api-keys"
+                href={currentProvider.setup.apiKeyUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-1 text-sm text-primary hover:underline"
               >
-                Don't have an API key? Get one here
+                Get your {currentProvider.name} API key
                 <ExternalLink className="h-3 w-3" />
               </a>
             )}
@@ -193,10 +381,10 @@ export function SettingsPage() {
                 {isValidating ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Validating...
+                    Testing connection...
                   </>
                 ) : (
-                  'Connect API Key'
+                  'Connect & Test'
                 )}
               </Button>
             </>
@@ -211,7 +399,7 @@ export function SettingsPage() {
           <CardDescription>Export your exams directly to Google Drive</CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">Coming soon...</p>
+          <p className="text-sm text-muted-foreground">Coming in Phase 4...</p>
         </CardContent>
       </Card>
     </div>
