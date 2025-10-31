@@ -30,6 +30,7 @@ import type { QuestionType, DifficultyLevel } from '../store/useExamConfigStore'
 import type { AIProviderType } from '../types/ai-providers'
 import type { GeneratedQuestion, GeneratedExam } from '../store/useExamGenerationStore'
 import { AIProviderFactory } from './ai-providers/provider-factory'
+import { ExamParser } from './ExamParser'
 
 /**
  * Exam Configuration for Generation
@@ -89,9 +90,11 @@ export class ExamGenerationService {
   private config: ExamGenerationConfig
   private maxRetries = 3
   private retryDelay = 1000 // milliseconds
+  private examParser: ExamParser
 
   constructor(config: ExamGenerationConfig) {
     this.config = config
+    this.examParser = new ExamParser()
   }
 
   /**
@@ -136,7 +139,7 @@ export class ExamGenerationService {
         }
 
         // Generate questions from this file
-        const questions = await this.generateQuestionsFromFile(
+        const { questions, rawResponse } = await this.generateQuestionsFromFile(
           provider,
           fileContent,
           file.name,
@@ -144,6 +147,9 @@ export class ExamGenerationService {
         )
 
         allQuestions.push(...questions)
+
+        // Log raw response for debugging
+        console.log('[ExamGenerationService] Raw AI response preview:', rawResponse.substring(0, 500))
 
         // Stop if we have enough questions
         if (allQuestions.length >= this.config.totalQuestions) {
@@ -254,7 +260,7 @@ export class ExamGenerationService {
     fileName: string,
     questionsToGenerate: number,
     retryCount = 0
-  ): Promise<GeneratedQuestion[]> {
+  ): Promise<{ questions: GeneratedQuestion[]; rawResponse: string }> {
     try {
       // Build exam config for this file
       const examConfig = this.buildExamConfig(questionsToGenerate)
@@ -270,7 +276,7 @@ export class ExamGenerationService {
         throw new Error('No questions generated from response')
       }
 
-      return questions
+      return { questions, rawResponse: response }
     } catch (error) {
       // Retry logic
       if (retryCount < this.maxRetries) {
@@ -335,41 +341,55 @@ export class ExamGenerationService {
   /**
    * Parse AI response into structured questions
    *
-   * The AI providers return text-formatted exams, not JSON.
-   * For now, we'll create placeholder questions based on the response.
-   * TODO: Implement proper parsing of text-formatted exams
+   * Uses ExamParser to convert AI's text-formatted exam into structured data.
    */
   private parseAIResponse(response: string): GeneratedQuestion[] {
-    // For now, create placeholder questions
-    // In production, we would parse the actual exam format
-    const questions: GeneratedQuestion[] = []
+    console.log('[ExamGenerationService] Parsing AI response...')
 
-    // Extract question count from response or use a default
-    const questionCount = this.extractQuestionCount(response) || 10
+    try {
+      // Use ExamParser to parse the text format
+      const questions = this.examParser.parseExam(response)
+
+      console.log('[ExamGenerationService] Successfully parsed', questions.length, 'questions')
+
+      return questions
+    } catch (error) {
+      console.error('[ExamGenerationService] Parse error:', error)
+
+      // Fallback: Create minimal placeholder if parsing fails completely
+      console.warn('[ExamGenerationService] Falling back to basic extraction')
+
+      return this.createFallbackQuestions(response)
+    }
+  }
+
+  /**
+   * Fallback: Create basic questions if parsing fails
+   *
+   * This is a last resort to avoid complete failure
+   */
+  private createFallbackQuestions(response: string): GeneratedQuestion[] {
+    // Count questions by looking for numbered patterns
+    const matches = response.match(/^\d+\./gm)
+    const questionCount = matches ? Math.min(matches.length, this.config.totalQuestions) : 10
+
+    console.log('[ExamGenerationService] Creating', questionCount, 'fallback questions')
+
+    const questions: GeneratedQuestion[] = []
 
     for (let i = 0; i < questionCount; i++) {
       questions.push({
-        id: `q-${Date.now()}-${i}`,
+        id: `q-fallback-${i + 1}`,
         type: 'multipleChoice',
         difficulty: 'moderate',
-        question: `Question ${i + 1} (parsed from AI response)`,
-        options: ['A', 'B', 'C', 'D'],
+        question: `Question ${i + 1} (AI response parsing failed - please review manually)`,
+        options: ['Option A', 'Option B', 'Option C', 'Option D'],
         answer: 'A',
-        explanation: 'Extracted from AI-generated exam',
+        explanation: 'Parsing failed - raw AI response should be reviewed',
       })
     }
 
     return questions
-  }
-
-  /**
-   * Extract question count from response
-   * TODO: Implement proper parsing
-   */
-  private extractQuestionCount(response: string): number | null {
-    // Very basic extraction - count question numbers in response
-    const matches = response.match(/\d+\./g)
-    return matches ? matches.length : null
   }
 
   /**
