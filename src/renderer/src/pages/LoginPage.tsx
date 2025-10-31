@@ -65,6 +65,9 @@ export function LoginPage() {
         email,
         name: email.split('@')[0], // Use email username as name for now
         createdAt: new Date().toISOString(),
+        chatgptConnected: false,
+        googleDriveConnected: false,
+        aiConnected: false,
       })
 
       // Navigate to home page

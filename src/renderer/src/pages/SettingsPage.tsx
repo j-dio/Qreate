@@ -26,7 +26,6 @@ import {
   Loader2,
   ExternalLink,
   Sparkles,
-  DollarSign,
   Shield,
   Zap,
 } from 'lucide-react'
@@ -51,7 +50,6 @@ export function SettingsPage() {
   const navigate = useNavigate()
 
   // Store state
-  const user = useAppStore((state) => state.user)
   const apiCredentials = useAppStore((state) => state.apiCredentials)
   const selectedAIProvider = useAppStore((state) => state.selectedAIProvider)
   const setApiCredentials = useAppStore((state) => state.setApiCredentials)

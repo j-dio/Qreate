@@ -11,10 +11,11 @@
  * - Handle IPC communication with renderer
  */
 
-import { app, BrowserWindow, ipcMain, dialog } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
 import path from 'path'
 import * as fs from 'fs/promises'
 import { FileTextExtractor } from './services/FileTextExtractor'
+import { GoogleDriveService } from './services/GoogleDriveService'
 
 // Global reference to prevent garbage collection
 let mainWindow: BrowserWindow | null = null
@@ -103,8 +104,9 @@ app.on('web-contents-created', (_, contents) => {
  * Register handlers for communication between renderer and main process.
  */
 function registerIpcHandlers(): void {
-  // Initialize file text extractor
+  // Initialize services
   const fileTextExtractor = new FileTextExtractor()
+  const googleDriveService = new GoogleDriveService()
 
   /**
    * Open file dialog for selecting files
@@ -167,6 +169,138 @@ function registerIpcHandlers(): void {
       error: result.error,
     })
     return result
+  })
+
+  /**
+   * Google Drive: Check if authenticated
+   */
+  ipcMain.handle('google-drive-check-auth', async () => {
+    console.log('[IPC] Check Google Drive auth status')
+    return googleDriveService.isAuthenticated()
+  })
+
+  /**
+   * Google Drive: Get OAuth URL
+   *
+   * Returns the URL to open in browser for authentication.
+   */
+  ipcMain.handle('google-drive-get-auth-url', async () => {
+    console.log('[IPC] Get Google Drive auth URL')
+    try {
+      const url = await googleDriveService.getAuthUrl()
+      return { success: true, url }
+    } catch (error) {
+      console.error('[IPC] Failed to get auth URL:', error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to get auth URL',
+      }
+    }
+  })
+
+  /**
+   * Google Drive: Authenticate with authorization code
+   *
+   * After user grants permission in browser, complete the OAuth flow.
+   */
+  ipcMain.handle('google-drive-authenticate', async (_, code: string) => {
+    console.log('[IPC] Authenticate Google Drive with code')
+    try {
+      await googleDriveService.authenticateWithCode(code)
+      return { success: true }
+    } catch (error) {
+      console.error('[IPC] Authentication failed:', error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Authentication failed',
+      }
+    }
+  })
+
+  /**
+   * Google Drive: Get user's email
+   */
+  ipcMain.handle('google-drive-get-user-email', async () => {
+    console.log('[IPC] Get Google Drive user email')
+    try {
+      const email = await googleDriveService.getUserEmail()
+      return { success: true, email }
+    } catch (error) {
+      console.error('[IPC] Failed to get user email:', error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to get user email',
+      }
+    }
+  })
+
+  /**
+   * Google Drive: Disconnect
+   */
+  ipcMain.handle('google-drive-disconnect', async () => {
+    console.log('[IPC] Disconnect Google Drive')
+    try {
+      googleDriveService.disconnect()
+      return { success: true }
+    } catch (error) {
+      console.error('[IPC] Disconnect failed:', error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Disconnect failed',
+      }
+    }
+  })
+
+  /**
+   * Google Drive: Create document
+   *
+   * @param title - Document title
+   * @param content - Formatted content (Google Docs API requests)
+   */
+  ipcMain.handle('google-drive-create-document', async (_, title: string, content: any) => {
+    console.log('[IPC] Create Google Doc:', title)
+    try {
+      const documentId = await googleDriveService.createDocument(title, content)
+      const url = googleDriveService.getDocumentUrl(documentId)
+      return { success: true, documentId, url }
+    } catch (error) {
+      console.error('[IPC] Failed to create document:', error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to create document',
+      }
+    }
+  })
+
+  /**
+   * Google Drive: Export to PDF
+   *
+   * @param documentId - Google Doc ID
+   * @param outputPath - Local file path to save PDF
+   */
+  ipcMain.handle('google-drive-export-pdf', async (_, documentId: string, outputPath: string) => {
+    console.log('[IPC] Export PDF:', documentId, '->', outputPath)
+    try {
+      await googleDriveService.exportToPDF(documentId, outputPath)
+      return { success: true, path: outputPath }
+    } catch (error) {
+      console.error('[IPC] Failed to export PDF:', error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to export PDF',
+      }
+    }
+  })
+
+  /**
+   * Open URL in default browser
+   *
+   * Used for opening OAuth URL and Google Docs links.
+   */
+  ipcMain.handle('open-external-url', async (_, url: string) => {
+    console.log('[IPC] Open external URL:', url)
+    await shell.openExternal(url)
+    return { success: true }
   })
 
   console.log('[IPC] Handlers registered successfully')

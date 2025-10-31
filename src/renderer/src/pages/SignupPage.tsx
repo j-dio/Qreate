@@ -116,6 +116,9 @@ export function SignupPage() {
         email: formData.email,
         name: formData.name,
         createdAt: new Date().toISOString(),
+        chatgptConnected: false,
+        googleDriveConnected: false,
+        aiConnected: false,
       })
 
       // Navigate to home page

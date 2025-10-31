@@ -39,3 +39,7 @@ coverage/
 
 # Electron
 *.cache/
+
+# Google OAuth
+credentials.json
+token.json

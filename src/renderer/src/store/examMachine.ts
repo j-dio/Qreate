@@ -18,7 +18,7 @@
  * 6. complete - Exams ready for download
  */
 
-import { createMachine, assign } from 'xstate'
+import { createMachine, assign, fromPromise } from 'xstate'
 
 /**
  * Uploaded file interface
@@ -230,15 +230,13 @@ export const examMachine = createMachine(
         },
       }),
       setGeneratedExams: assign({
-        generatedExams: ({ event }) => {
-          // @ts-expect-error - XState onDone event structure
+        generatedExams: ({ event }: any) => {
           return event.output
         },
       }),
       setError: assign({
-        error: ({ event }) => {
-          // @ts-expect-error - XState onError event structure
-          return event.error.message || 'An error occurred'
+        error: ({ event }: any) => {
+          return event.error?.message || 'An error occurred'
         },
       }),
       downloadExams: () => {
@@ -263,7 +261,7 @@ export const examMachine = createMachine(
     },
     actors: {
       // Placeholder - will implement actual API call later
-      generateExams: async ({ context }) => {
+      generateExams: fromPromise(async () => {
         // Simulate API call
         await new Promise((resolve) => setTimeout(resolve, 2000))
         return [
@@ -274,7 +272,7 @@ export const examMachine = createMachine(
             answerKey: 'Sample answers',
           },
         ] as GeneratedExam[]
-      },
+      }),
     },
   }
 )

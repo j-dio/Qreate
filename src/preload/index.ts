@@ -45,6 +45,42 @@ const electronAPI = {
   extractFileText: (filePath: string) => {
     return ipcRenderer.invoke('extract-file-text', filePath)
   },
+
+  // Google Drive operations
+  googleDrive: {
+    checkAuth: () => {
+      return ipcRenderer.invoke('google-drive-check-auth')
+    },
+
+    getAuthUrl: () => {
+      return ipcRenderer.invoke('google-drive-get-auth-url')
+    },
+
+    authenticate: (code: string) => {
+      return ipcRenderer.invoke('google-drive-authenticate', code)
+    },
+
+    getUserEmail: () => {
+      return ipcRenderer.invoke('google-drive-get-user-email')
+    },
+
+    disconnect: () => {
+      return ipcRenderer.invoke('google-drive-disconnect')
+    },
+
+    createDocument: (title: string, content: any) => {
+      return ipcRenderer.invoke('google-drive-create-document', title, content)
+    },
+
+    exportToPDF: (documentId: string, outputPath: string) => {
+      return ipcRenderer.invoke('google-drive-export-pdf', documentId, outputPath)
+    },
+  },
+
+  // Open external URL in browser
+  openExternalUrl: (url: string) => {
+    return ipcRenderer.invoke('open-external-url', url)
+  },
 }
 
 // Expose the API to renderer
