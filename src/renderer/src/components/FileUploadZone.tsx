@@ -20,7 +20,7 @@
  * 6. Success feedback if files are accepted
  */
 
-import { useCallback, useRef, useState, useEffect } from 'react'
+import { useCallback, useState, useEffect } from 'react'
 import { Upload, AlertCircle, CheckCircle2, FileText } from 'lucide-react'
 import { useFileUploadStore } from '../store/useFileUploadStore'
 import { validateFiles, getValidationRulesSummary } from '../utils/fileValidation'
@@ -35,9 +35,6 @@ export function FileUploadZone() {
   // Local state
   const [validationError, setValidationError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
-
-  // Ref for the hidden file input element
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Get validation rules for display
   const rules = getValidationRulesSummary()
@@ -196,23 +193,57 @@ export function FileUploadZone() {
   /**
    * Handle click to browse files
    *
-   * Triggers the hidden file input element
+   * Uses Electron's native file dialog to get actual file paths.
+   * This is necessary because HTML file inputs don't expose file paths for security.
    */
-  const handleClick = useCallback(() => {
-    fileInputRef.current?.click()
-  }, [])
+  const handleClick = useCallback(async () => {
+    // Clear previous messages
+    setValidationError(null)
+    setSuccessMessage(null)
 
-  /**
-   * Handle file input change (from file browser dialog)
-   */
-  const handleFileInputChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      handleFiles(e.target.files)
-      // Reset input value so the same file can be selected again
-      e.target.value = ''
-    },
-    [handleFiles]
-  )
+    try {
+      // Open Electron file dialog
+      const result = await window.electron.openFileDialog()
+
+      if (result.canceled || result.files.length === 0) {
+        return
+      }
+
+      // Create File-like objects with path property
+      const fileArray = result.files.map((fileInfo: any) => {
+        // Create a pseudo-File object that has the necessary properties
+        const file = {
+          name: fileInfo.name,
+          size: fileInfo.size,
+          type: fileInfo.type,
+          path: fileInfo.path, // This is the key property we need!
+          lastModified: Date.now(),
+        } as File & { path: string }
+
+        return file
+      })
+
+      // Validate files
+      const validation = validateFiles(fileArray, uploadedFiles.length, totalSize)
+
+      if (!validation.isValid) {
+        setValidationError(validation.error || 'Invalid files')
+        return
+      }
+
+      // Files are valid, add them to store
+      addFiles(fileArray)
+
+      // Show success message
+      const fileWord = fileArray.length === 1 ? 'file' : 'files'
+      setSuccessMessage(`Successfully added ${fileArray.length} ${fileWord}`)
+
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccessMessage(null), 3000)
+    } catch (error) {
+      setValidationError(error instanceof Error ? error.message : 'Failed to select files')
+    }
+  }, [uploadedFiles.length, totalSize, addFiles])
 
   return (
     <div className="space-y-4">
@@ -268,16 +299,6 @@ export function FileUploadZone() {
           </div>
         </CardContent>
       </Card>
-
-      {/* Hidden file input */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        multiple
-        accept=".pdf,.docx,.doc,.txt,.png,.jpg,.jpeg"
-        onChange={handleFileInputChange}
-        className="hidden"
-      />
 
       {/* Validation Error Message */}
       {validationError && (

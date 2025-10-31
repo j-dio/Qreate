@@ -36,6 +36,15 @@ const electronAPI = {
       ipcRenderer.on(channel, (_, data) => callback(data))
     }
   },
+
+  // File operations
+  openFileDialog: () => {
+    return ipcRenderer.invoke('open-file-dialog')
+  },
+
+  extractFileText: (filePath: string) => {
+    return ipcRenderer.invoke('extract-file-text', filePath)
+  },
 }
 
 // Expose the API to renderer

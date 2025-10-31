@@ -213,27 +213,36 @@ export class ExamGenerationService {
   /**
    * Extract text content from uploaded file
    *
-   * TODO: Implement actual text extraction for PDF, DOCX, images with OCR
-   * For now, returns placeholder text
+   * Uses IPC to call the main process FileTextExtractor service.
+   * Supports .txt and .docx files.
    */
   private async extractTextFromFile(file: UploadedFile): Promise<string> {
-    // TODO: Phase 3 - Implement file text extraction
-    // - PDF: Use pdf-parse
-    // - DOCX: Use mammoth
-    // - Images: Use Tesseract OCR
-    // - TXT: Direct read
+    // Validate file has path
+    if (!file.path) {
+      throw new Error(`File path not available for ${file.name}`)
+    }
 
-    // For now, return placeholder
-    return `This is placeholder content from ${file.name}.
+    console.log('[ExamGenerationService] Extracting text from:', file.path)
 
-In a production system, this would contain the actual extracted text from the file.
-The text extraction would handle:
-- PDF files using pdf-parse library
-- DOCX files using mammoth library
-- Images using Tesseract OCR
-- Plain text files with direct reading
+    // Call main process to extract text
+    const result = await window.electron.extractFileText(file.path)
 
-This content would then be used by the AI to generate relevant questions.`
+    // Handle extraction result
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to extract text from file')
+    }
+
+    if (!result.text || result.text.trim().length === 0) {
+      throw new Error(`File ${file.name} appears to be empty`)
+    }
+
+    console.log('[ExamGenerationService] Successfully extracted text:', {
+      fileName: file.name,
+      textLength: result.text.length,
+      wordCount: result.metadata?.wordCount || 0,
+    })
+
+    return result.text
   }
 
   /**

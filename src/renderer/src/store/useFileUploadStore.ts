@@ -28,7 +28,8 @@ import { create } from 'zustand'
  * - file: The actual File object from the browser
  * - name: Original filename
  * - size: File size in bytes
- * - type: MIME type (e.g., 'application/pdf')
+ * - type: MIME type (e.g., 'text/plain', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+ * - path: Absolute file path (for Electron file access)
  * - status: Current processing state
  * - error: Error message if validation/processing fails
  * - extractedText: Text content extracted from the file (populated later)
@@ -39,6 +40,7 @@ export interface UploadedFile {
   name: string
   size: number
   type: string
+  path?: string // Added for Electron file access
   status: 'pending' | 'validating' | 'valid' | 'invalid' | 'extracting' | 'ready'
   error?: string
   extractedText?: string
@@ -47,19 +49,20 @@ export interface UploadedFile {
 /**
  * Validation constraints
  * These enforce the requirements from CLAUDE.md
+ *
+ * UPDATED: Only .txt and .docx files supported
+ * - PDF support disabled (text extraction issues)
+ * - Legacy .doc format not supported (convert to .docx)
+ * - Images not yet supported (OCR planned for future)
  */
 export const VALIDATION_RULES = {
   MAX_FILES: 5, // Maximum number of files
   MAX_FILE_SIZE: 50 * 1024 * 1024, // 50MB per file in bytes
   MAX_TOTAL_SIZE: 200 * 1024 * 1024, // 200MB total in bytes
   ALLOWED_TYPES: {
-    // File type categories and their MIME types
-    'application/pdf': ['pdf'],
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['docx'],
-    'application/msword': ['doc'],
+    // Only text and modern Word documents
     'text/plain': ['txt'],
-    'image/png': ['png'],
-    'image/jpeg': ['jpg', 'jpeg'],
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['docx'],
   } as const,
 }
 
@@ -106,7 +109,8 @@ export const useFileUploadStore = create<FileUploadState>((set, get) => ({
    * 1. Generate unique ID for each file
    * 2. Calculate total size
    * 3. Add to state with 'pending' status
-   * 4. Files will be validated in the component
+   * 4. Preserve file path if available (from Electron file dialog)
+   * 5. Files will be validated in the component
    */
   addFiles: (files) =>
     set((state) => {
@@ -117,8 +121,15 @@ export const useFileUploadStore = create<FileUploadState>((set, get) => ({
         name: file.name,
         size: file.size,
         type: file.type,
+        path: (file as any).path, // Preserve path from Electron file dialog
         status: 'pending',
       }))
+
+      console.log('[FileUploadStore] Adding files:', newFiles.map(f => ({
+        name: f.name,
+        hasPath: !!f.path,
+        path: f.path
+      })))
 
       // Calculate new total size
       const newTotalSize = state.totalSize + newFiles.reduce((sum, f) => sum + f.size, 0)
