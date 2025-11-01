@@ -2,20 +2,17 @@
  * Exam Success Page
  *
  * Shown after exam generation completes.
- * Allows user to connect Google Drive and create documents.
+ * Allows user to download PDF of the generated exam.
  *
  * User Flow:
  * 1. Exam generated successfully ✅
- * 2. If not connected: [Connect Google Drive] button
- * 3. Once connected: Automatically create Google Doc
- * 4. Show: [Open in Google Docs] [Download PDF] buttons
- * 5. Option to create another exam
+ * 2. Click "Download PDF" to generate and save PDF
+ * 3. Option to create another exam or go home
  *
  * UX Principles:
  * - Clear success message
- * - One-click Google Drive connection
- * - Automatic document creation (no extra clicks)
- * - Fallback to local storage if Google Drive fails
+ * - Simple one-click PDF download
+ * - Local file generation (no cloud dependencies)
  * - Clear next actions
  */
 
@@ -25,16 +22,15 @@ import {
   CheckCircle2,
   FileText,
   Download,
-  ExternalLink,
   Loader2,
   AlertCircle,
   Home,
   RefreshCw,
+  FolderOpen,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import type { GeneratedExam } from '../store/useExamGenerationStore'
-import { DocumentFormatter } from '../services/DocumentFormatter'
 
 /**
  * State passed from ExamGenerationProgressPage
@@ -44,9 +40,9 @@ interface LocationState {
 }
 
 /**
- * Document creation status
+ * PDF generation status
  */
-type DocumentStatus = 'idle' | 'connecting' | 'creating' | 'success' | 'error'
+type PDFStatus = 'idle' | 'generating' | 'success' | 'error'
 
 export function ExamSuccessPage() {
   const navigate = useNavigate()
@@ -54,13 +50,9 @@ export function ExamSuccessPage() {
   const state = location.state as LocationState | null
 
   // Local state
-  const [documentStatus, setDocumentStatus] = useState<DocumentStatus>('idle')
+  const [pdfStatus, setPDFStatus] = useState<PDFStatus>('idle')
   const [error, setError] = useState<string | null>(null)
-  const [documentId, setDocumentId] = useState<string | null>(null)
-  const [documentUrl, setDocumentUrl] = useState<string | null>(null)
   const [pdfPath, setPdfPath] = useState<string | null>(null)
-  const [isConnectedToGoogleDrive, setIsConnectedToGoogleDrive] = useState(false)
-  const [userEmail, setUserEmail] = useState<string | null>(null)
 
   // Redirect if no exam data
   useEffect(() => {
@@ -70,162 +62,63 @@ export function ExamSuccessPage() {
     }
   }, [state, navigate])
 
-  // Check Google Drive connection status on mount
-  useEffect(() => {
-    checkGoogleDriveConnection()
-  }, [])
-
   /**
-   * Check if user is already connected to Google Drive
-   */
-  const checkGoogleDriveConnection = async () => {
-    try {
-      const isAuthenticated = await window.electron.googleDrive.checkAuth()
-      setIsConnectedToGoogleDrive(isAuthenticated)
-
-      if (isAuthenticated) {
-        // Get user email
-        const result = await window.electron.googleDrive.getUserEmail()
-        if (result.success) {
-          setUserEmail(result.email)
-        }
-
-        // Auto-create document if connected
-        await createDocument()
-      }
-    } catch (error) {
-      console.error('[ExamSuccessPage] Failed to check auth:', error)
-    }
-  }
-
-  /**
-   * Connect to Google Drive (OAuth flow)
-   */
-  const handleConnectGoogleDrive = async () => {
-    setDocumentStatus('connecting')
-    setError(null)
-
-    try {
-      // Step 1: Get OAuth URL
-      const urlResult = await window.electron.googleDrive.getAuthUrl()
-      if (!urlResult.success) {
-        throw new Error(urlResult.error || 'Failed to get auth URL')
-      }
-
-      // Step 2: Open browser for OAuth
-      await window.electron.openExternalUrl(urlResult.url)
-
-      // Step 3: Wait for user to authorize and paste code
-      // TODO: Implement code input dialog
-      // For now, we'll show instructions
-      alert(
-        'Please authorize in the browser that just opened.\n\n' +
-          'After authorizing, you will see an authorization code.\n' +
-          'Copy the code and paste it in the next dialog.'
-      )
-
-      const code = prompt('Enter the authorization code:')
-      if (!code) {
-        setDocumentStatus('idle')
-        return
-      }
-
-      // Step 4: Complete authentication
-      const authResult = await window.electron.googleDrive.authenticate(code)
-      if (!authResult.success) {
-        throw new Error(authResult.error || 'Authentication failed')
-      }
-
-      // Step 5: Get user email
-      const emailResult = await window.electron.googleDrive.getUserEmail()
-      if (emailResult.success) {
-        setUserEmail(emailResult.email)
-      }
-
-      setIsConnectedToGoogleDrive(true)
-
-      // Step 6: Auto-create document
-      await createDocument()
-    } catch (error) {
-      console.error('[ExamSuccessPage] Connection failed:', error)
-      setError(error instanceof Error ? error.message : 'Failed to connect to Google Drive')
-      setDocumentStatus('error')
-    }
-  }
-
-  /**
-   * Create Google Doc from exam
-   */
-  const createDocument = async () => {
-    if (!state?.exam) return
-
-    setDocumentStatus('creating')
-    setError(null)
-
-    try {
-      // Format exam for Google Docs
-      const formatter = new DocumentFormatter()
-      const content = formatter.formatExam(state.exam)
-
-      // Create document
-      const title = `${state.exam.topic || 'Generated Exam'}_${Date.now()}`
-      const result = await window.electron.googleDrive.createDocument(title, content)
-
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to create document')
-      }
-
-      setDocumentId(result.documentId!)
-      setDocumentUrl(result.url!)
-      setDocumentStatus('success')
-
-      console.log('[ExamSuccessPage] Document created:', result.documentId)
-    } catch (error) {
-      console.error('[ExamSuccessPage] Failed to create document:', error)
-      setError(error instanceof Error ? error.message : 'Failed to create document')
-      setDocumentStatus('error')
-    }
-  }
-
-  /**
-   * Download PDF
+   * Generate and download PDF
    */
   const handleDownloadPDF = async () => {
-    if (!documentId || !state?.exam) return
+    if (!state?.exam) return
+
+    setPDFStatus('generating')
+    setError(null)
 
     try {
-      // Use project root + Projects directory
-      const projectsDir = 'Projects'
-      const filename = `${state.exam.topic.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.pdf`
-      const outputPath = `${projectsDir}/${filename}`
+      // DEBUG: Log exam structure
+      console.log('[ExamSuccessPage] Exam object:', state.exam)
+      console.log('[ExamSuccessPage] First question:', state.exam.questions[0])
+      console.log('[ExamSuccessPage] First question options:', state.exam.questions[0]?.options)
 
-      const result = await window.electron.googleDrive.exportToPDF(documentId, outputPath)
+      // Create filename from topic
+      const sanitizedTopic = state.exam.topic.replace(/[^a-zA-Z0-9]/g, '_')
+      const timestamp = Date.now()
+      const filename = `${sanitizedTopic}_${timestamp}.pdf`
+      const outputPath = `Projects/${filename}`
+
+      console.log('[ExamSuccessPage] Generating PDF:', outputPath)
+
+      // Generate PDF
+      const result = await window.electron.generateExamPDF(state.exam, outputPath)
 
       if (!result.success) {
-        throw new Error(result.error || 'Failed to export PDF')
+        throw new Error(result.error || 'Failed to generate PDF')
       }
 
       setPdfPath(result.path!)
-      alert(`PDF saved to: ${result.path}`)
+      setPDFStatus('success')
+
+      console.log('[ExamSuccessPage] PDF generated:', result.path)
     } catch (error) {
-      console.error('[ExamSuccessPage] Failed to download PDF:', error)
-      alert('Failed to download PDF: ' + (error instanceof Error ? error.message : 'Unknown error'))
+      console.error('[ExamSuccessPage] Failed to generate PDF:', error)
+      setError(error instanceof Error ? error.message : 'Failed to generate PDF')
+      setPDFStatus('error')
     }
   }
 
   /**
-   * Open Google Docs in browser
+   * Open folder containing the PDF
    */
-  const handleOpenInGoogleDocs = async () => {
-    if (!documentUrl) return
-    await window.electron.openExternalUrl(documentUrl)
+  const handleOpenFolder = () => {
+    if (pdfPath) {
+      // Extract directory from path
+      const folderPath = pdfPath.substring(0, pdfPath.lastIndexOf('\\'))
+      window.electron.openExternalUrl(`file:///${folderPath}`)
+    }
   }
 
   /**
    * Create another exam
    */
   const handleCreateAnother = () => {
-    navigate('/exam-config/upload')
+    navigate('/create-exam/upload')
   }
 
   if (!state?.exam) {
@@ -244,7 +137,8 @@ export function ExamSuccessPage() {
             <div>
               <h1 className="text-2xl font-bold text-green-900">Exam Generated Successfully!</h1>
               <p className="text-green-700 mt-1">
-                {state.exam.totalQuestions} questions created from {state.exam.metadata.sourceFiles.length} file(s)
+                {state.exam.totalQuestions} questions created from{' '}
+                {state.exam.metadata.sourceFiles.length} file(s)
               </p>
             </div>
           </CardContent>
@@ -270,87 +164,82 @@ export function ExamSuccessPage() {
               </div>
               <div className="col-span-2">
                 <span className="text-muted-foreground">Source Files:</span>
-                <span className="ml-2 font-medium">{state.exam.metadata.sourceFiles.join(', ')}</span>
+                <span className="ml-2 font-medium">
+                  {state.exam.metadata.sourceFiles.join(', ')}
+                </span>
               </div>
               <div>
                 <span className="text-muted-foreground">AI Provider:</span>
-                <span className="ml-2 font-medium">{state.exam.metadata.aiProvider}</span>
+                <span className="ml-2 font-medium capitalize">
+                  {state.exam.metadata.aiProvider}
+                </span>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Google Drive Connection */}
+        {/* PDF Download */}
         <Card>
           <CardHeader>
-            <CardTitle>Save to Google Drive</CardTitle>
+            <CardTitle>Download Your Exam</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Connection Status */}
-            {!isConnectedToGoogleDrive && documentStatus !== 'connecting' && (
+            {/* Initial State */}
+            {pdfStatus === 'idle' && (
               <div className="space-y-3">
                 <p className="text-sm text-muted-foreground">
-                  Connect your Google Drive to save this exam as a Google Doc and export to PDF.
+                  Generate a PDF file of your exam with professionally formatted questions and
+                  answer key.
                 </p>
-                <Button onClick={handleConnectGoogleDrive} className="w-full" size="lg">
-                  Connect Google Drive
+                <Button onClick={handleDownloadPDF} className="w-full" size="lg">
+                  <Download className="h-4 w-4 mr-2" />
+                  Download PDF
                 </Button>
               </div>
             )}
 
-            {/* Connecting */}
-            {documentStatus === 'connecting' && (
+            {/* Generating */}
+            {pdfStatus === 'generating' && (
               <div className="flex items-center justify-center gap-3 py-4">
                 <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
-                <span className="text-sm">Connecting to Google Drive...</span>
-              </div>
-            )}
-
-            {/* Creating Document */}
-            {documentStatus === 'creating' && (
-              <div className="flex items-center justify-center gap-3 py-4">
-                <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
-                <span className="text-sm">Creating Google Doc...</span>
+                <span className="text-sm">Generating PDF...</span>
               </div>
             )}
 
             {/* Success */}
-            {documentStatus === 'success' && documentUrl && (
+            {pdfStatus === 'success' && pdfPath && (
               <div className="space-y-3">
                 <div className="flex items-center gap-2 text-green-600">
                   <CheckCircle2 className="h-5 w-5" />
-                  <span className="font-medium">Document created successfully!</span>
+                  <span className="font-medium">PDF generated successfully!</span>
                 </div>
-                {userEmail && (
-                  <p className="text-sm text-muted-foreground">Connected as {userEmail}</p>
-                )}
+                <p className="text-xs text-muted-foreground break-all">
+                  Saved to: {pdfPath}
+                </p>
                 <div className="flex gap-3">
-                  <Button onClick={handleOpenInGoogleDocs} className="flex-1" variant="outline">
-                    <ExternalLink className="h-4 w-4 mr-2" />
-                    Open in Google Docs
+                  <Button onClick={handleOpenFolder} variant="outline" className="flex-1">
+                    <FolderOpen className="h-4 w-4 mr-2" />
+                    Open Folder
                   </Button>
-                  <Button onClick={handleDownloadPDF} className="flex-1">
+                  <Button onClick={handleDownloadPDF} variant="outline" className="flex-1">
                     <Download className="h-4 w-4 mr-2" />
-                    Download PDF
+                    Download Again
                   </Button>
                 </div>
-                {pdfPath && (
-                  <p className="text-xs text-green-600">PDF saved to: {pdfPath}</p>
-                )}
               </div>
             )}
 
             {/* Error */}
-            {documentStatus === 'error' && error && (
+            {pdfStatus === 'error' && error && (
               <div className="space-y-3">
                 <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-lg">
                   <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-red-900">Failed to create document</p>
+                    <p className="text-sm font-medium text-red-900">Failed to generate PDF</p>
                     <p className="text-sm text-red-700 mt-1">{error}</p>
                   </div>
                 </div>
-                <Button onClick={createDocument} variant="outline" className="w-full">
+                <Button onClick={handleDownloadPDF} variant="outline" className="w-full">
                   <RefreshCw className="h-4 w-4 mr-2" />
                   Retry
                 </Button>

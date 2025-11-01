@@ -149,7 +149,11 @@ export class ExamGenerationService {
         allQuestions.push(...questions)
 
         // Log raw response for debugging
-        console.log('[ExamGenerationService] Raw AI response preview:', rawResponse.substring(0, 500))
+        console.log('[ExamGenerationService] ========== RAW AI RESPONSE ==========')
+        console.log(rawResponse)
+        console.log('[ExamGenerationService] ========== END RAW RESPONSE ==========')
+        console.log('[ExamGenerationService] Parsed questions:', questions)
+        console.log('[ExamGenerationService] First question:', questions[0])
 
         // Stop if we have enough questions
         if (allQuestions.length >= this.config.totalQuestions) {

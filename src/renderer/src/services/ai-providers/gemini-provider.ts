@@ -188,32 +188,63 @@ export class GeminiProvider implements IAIProvider {
 
 **CRITICAL INSTRUCTIONS:**
 1. Generate ONLY the exam content - no introductions, explanations, or suggestions
-2. Follow the format below EXACTLY
+2. Follow the format below EXACTLY - character for character
 3. Use ONLY information from the provided study material
-4. Distribute questions according to the specified difficulty levels
-5. Ensure questions are clear, unambiguous, and academically rigorous
+4. ALL questions must be complete sentences with proper formatting
+5. For Multiple Choice: ALWAYS include exactly 4 options (A, B, C, D) on separate lines
+6. For True/False: Label as "True/False" section, each question is a complete statement
+7. Ensure questions are clear, unambiguous, and academically rigorous
 
-**EXAM FORMAT REQUIREMENTS:**
+**EXACT OUTPUT FORMAT (follow this template precisely):**
 
 General Topic: [Extract the main topic from the study material]
 
 ----Exam Content----
 
-[For each question type, group questions together]
-[Format each question clearly with numbering]
-[For multiple choice, use A, B, C, D format]
-[For true/false, state the statement clearly]
-[For fill in the blanks, use _____ for blanks]
+Multiple Choice:
+
+1. [Question text here?]
+   A. [First option]
+   B. [Second option]
+   C. [Third option]
+   D. [Fourth option]
+
+2. [Next question text here?]
+   A. [First option]
+   B. [Second option]
+   C. [Third option]
+   D. [Fourth option]
+
+True/False:
+
+3. [Statement that can be true or false.]
+
+4. [Another statement that can be true or false.]
+
+Fill in the Blanks:
+
+5. [Question text with _____ representing the blank.]
+
+[Continue for all question types...]
 
 [PAGE BREAK]
 
 ----Answer Key----
 
-[List all answers in order]
-[For multiple choice: 1. A, 2. C, etc.]
-[For true/false: 1. True, 2. False, etc.]
-[For fill in blanks: provide the correct words]
-[For short answer/essay: provide key points or rubric]
+1. A
+2. C
+3. True
+4. False
+5. [correct word or phrase]
+[Continue for all questions...]
+
+**FORMATTING RULES:**
+- Number questions sequentially (1, 2, 3, etc.) across ALL types
+- Group questions by type (Multiple Choice first, then True/False, etc.)
+- Each multiple choice question MUST have exactly 4 options labeled A, B, C, D
+- Each option on its own line, indented with 3 spaces
+- One blank line between questions
+- Answer key: Just the number and answer (e.g., "1. A", not "1. A. First option")
 
 **QUESTION TYPES & QUANTITIES:**
 ${questionTypesText}
@@ -227,6 +258,6 @@ ${difficultyText}
 ${truncatedSource}
 
 **OUTPUT:**
-Generate the exam now. Remember: ONLY output the exam content in the format specified above. No additional text.`
+Generate the exam now following the EXACT format above. No introductory text, no explanations, ONLY the formatted exam.`
   }
 }

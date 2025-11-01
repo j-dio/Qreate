@@ -98,20 +98,53 @@ export class ExamParser {
     examContent: string
     answerKey: string
   } {
+    console.log('[ExamParser] Extracting sections from text...')
+    console.log('[ExamParser] Full text preview:', examText.substring(0, 500))
+
     // Extract topic
     const topicMatch = examText.match(/General Topic:\s*(.+)/i)
     const topic = topicMatch ? topicMatch[1].trim() : 'Generated Exam'
+    console.log('[ExamParser] Extracted topic:', topic)
 
-    // Split by ----Exam Content---- and ----Answer Key----
-    const examContentMatch = examText.match(/----Exam Content----\s*([\s\S]*?)(?:----Answer Key----|\[PAGE BREAK\])/i)
-    const answerKeyMatch = examText.match(/----Answer Key----\s*([\s\S]*?)$/i)
+    // Try multiple variations of section headers (case-insensitive, flexible dashes)
+    let examContentMatch = examText.match(/----+\s*Exam Content\s*----+\s*([\s\S]*?)(?:----+\s*Answer Key\s*----+|\[PAGE BREAK\])/i)
+
+    // If not found, try without dashes
+    if (!examContentMatch) {
+      console.log('[ExamParser] Standard format not found, trying alternative formats...')
+      examContentMatch = examText.match(/Exam Content[:\s]*([\s\S]*?)(?:Answer Key[:\s]|\[PAGE BREAK\])/i)
+    }
+
+    // If still not found, try to split by "Multiple Choice:" as the start of content
+    if (!examContentMatch) {
+      console.log('[ExamParser] Alternative format not found, trying to extract from Multiple Choice onwards...')
+      examContentMatch = examText.match(/(?:Multiple Choice|True\/False|Fill in|Short Answer|Essay|Matching|Identification)[:\s]*([\s\S]*?)(?:Answer Key[:\s]|\[PAGE BREAK\]|$)/i)
+      if (examContentMatch) {
+        // Prepend the question type header we found
+        const fullMatch = examText.match(/((?:Multiple Choice|True\/False|Fill in|Short Answer|Essay|Matching|Identification)[:\s]*[\s\S]*?)(?:Answer Key[:\s]|\[PAGE BREAK\]|$)/i)
+        if (fullMatch) {
+          examContentMatch[1] = fullMatch[1]
+        }
+      }
+    }
 
     if (!examContentMatch) {
-      throw new Error('Could not find "----Exam Content----" section')
+      console.error('[ExamParser] Could not find exam content in any known format')
+      console.error('[ExamParser] Full text:', examText)
+      throw new Error('Could not find exam content section in AI response')
     }
 
     const examContent = examContentMatch[1].trim()
+    console.log('[ExamParser] Extracted exam content:', examContent.length, 'characters')
+
+    // Extract answer key (flexible format)
+    let answerKeyMatch = examText.match(/----+\s*Answer Key\s*----+\s*([\s\S]*?)$/i)
+    if (!answerKeyMatch) {
+      answerKeyMatch = examText.match(/Answer Key[:\s]*([\s\S]*?)$/i)
+    }
+
     const answerKey = answerKeyMatch ? answerKeyMatch[1].trim() : ''
+    console.log('[ExamParser] Extracted answer key:', answerKey.length, 'characters')
 
     return { topic, examContent, answerKey }
   }
@@ -139,6 +172,9 @@ export class ExamParser {
   private splitByQuestionType(content: string): Array<{ type: GeneratedQuestion['type']; content: string }> {
     const sections: Array<{ type: GeneratedQuestion['type']; content: string }> = []
 
+    console.log('[ExamParser] ========== SPLITTING BY QUESTION TYPE ==========')
+    console.log('[ExamParser] Full content length:', content.length)
+
     // Find all question type headers
     const lines = content.split('\n')
     let currentType: GeneratedQuestion['type'] | null = null
@@ -151,11 +187,17 @@ export class ExamParser {
       const detectedType = this.detectQuestionType(trimmedLine)
 
       if (detectedType) {
+        console.log(`[ExamParser] Found section header: "${trimmedLine}" -> ${detectedType}`)
+
         // Save previous section
         if (currentType && currentContent.length > 0) {
+          const sectionContent = currentContent.join('\n').trim()
+          console.log(`[ExamParser] Saving previous section (${currentType}): ${sectionContent.length} characters`)
+          console.log(`[ExamParser] Section preview:`, sectionContent.substring(0, 300))
+
           sections.push({
             type: currentType,
-            content: currentContent.join('\n').trim(),
+            content: sectionContent,
           })
         }
 
@@ -170,11 +212,18 @@ export class ExamParser {
 
     // Save final section
     if (currentType && currentContent.length > 0) {
+      const sectionContent = currentContent.join('\n').trim()
+      console.log(`[ExamParser] Saving final section (${currentType}): ${sectionContent.length} characters`)
+      console.log(`[ExamParser] Section preview:`, sectionContent.substring(0, 300))
+
       sections.push({
         type: currentType,
-        content: currentContent.join('\n').trim(),
+        content: sectionContent,
       })
     }
+
+    console.log(`[ExamParser] Total sections found: ${sections.length}`)
+    console.log('[ExamParser] ========== END SPLITTING ==========')
 
     return sections
   }
@@ -222,16 +271,51 @@ export class ExamParser {
   private splitByQuestionNumber(content: string): Array<{ number: number; text: string }> {
     const blocks: Array<{ number: number; text: string }> = []
 
-    // Match question numbers like "1.", "2.", etc.
-    const regex = /^(\d+)\.\s+(.+?)(?=^\d+\.\s+|$)/gms
-    let match
+    console.log('[ExamParser] Splitting content by question numbers...')
+    console.log('[ExamParser] Content length:', content.length)
 
-    while ((match = regex.exec(content)) !== null) {
+    // Split by lines and manually group by question numbers
+    const lines = content.split('\n')
+    let currentQuestionNumber: number | null = null
+    let currentQuestionLines: string[] = []
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
+      // Check if this line starts with a question number (e.g., "1. ", "2. ")
+      const questionMatch = line.match(/^(\d+)\.\s+(.+)/)
+
+      if (questionMatch) {
+        // Save previous question if exists
+        if (currentQuestionNumber !== null && currentQuestionLines.length > 0) {
+          const questionText = currentQuestionLines.join('\n').trim()
+          console.log(`[ExamParser] Saved Q${currentQuestionNumber}: ${questionText.length} chars`)
+          blocks.push({
+            number: currentQuestionNumber,
+            text: questionText,
+          })
+        }
+
+        // Start new question
+        currentQuestionNumber = parseInt(questionMatch[1], 10)
+        currentQuestionLines = [questionMatch[2]] // Start with the question text (after the number)
+        console.log(`[ExamParser] Found question ${currentQuestionNumber}: "${questionMatch[2].substring(0, 50)}..."`)
+      } else if (currentQuestionNumber !== null) {
+        // Add this line to the current question
+        currentQuestionLines.push(line)
+      }
+    }
+
+    // Save the last question
+    if (currentQuestionNumber !== null && currentQuestionLines.length > 0) {
+      const questionText = currentQuestionLines.join('\n').trim()
+      console.log(`[ExamParser] Saved Q${currentQuestionNumber}: ${questionText.length} chars`)
       blocks.push({
-        number: parseInt(match[1], 10),
-        text: match[2].trim(),
+        number: currentQuestionNumber,
+        text: questionText,
       })
     }
+
+    console.log(`[ExamParser] Total blocks found: ${blocks.length}`)
 
     return blocks
   }
@@ -245,24 +329,45 @@ export class ExamParser {
     text: string
   ): GeneratedQuestion | null {
     try {
-      const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0)
+      console.log(`[ExamParser] ===== Parsing Q${number} (${type}) =====`)
+      console.log(`[ExamParser] Raw text block:`, text)
+
+      const lines = text.split('\n').filter(l => l.length > 0)
+      console.log(`[ExamParser] Split into ${lines.length} lines`)
 
       if (lines.length === 0) return null
 
-      // First line is the question
-      const questionText = lines[0]
+      // First line is the question (after trimming)
+      const questionText = lines[0].trim()
+      console.log(`[ExamParser] Question text: "${questionText}"`)
 
       // Remaining lines are options (for multiple choice, true/false, etc.)
       const options: string[] = []
 
+      console.log(`[ExamParser] Checking ${lines.length - 1} lines for options...`)
       for (let i = 1; i < lines.length; i++) {
         const line = lines[i]
-        // Match "A. Option", "B. Option", etc.
-        const optionMatch = line.match(/^[A-Z]\.\s+(.+)/)
+        console.log(`[ExamParser] Line ${i}: "${line}" (length: ${line.length})`)
+
+        // Match various option formats:
+        // "A. Option", "   A. Option", "A) Option", "a. Option"
+        // More flexible regex that handles indentation and different separators
+        const optionMatch = line.match(/^\s*([A-Da-d])[.)\]]\s+(.+)/)
+
         if (optionMatch) {
-          options.push(optionMatch[1].trim())
+          options.push(optionMatch[2].trim())
+          console.log(`[ExamParser] ✓ Matched! Letter: ${optionMatch[1]}, Text: ${optionMatch[2].trim()}`)
+        } else {
+          console.log(`[ExamParser] ✗ No match for this line`)
         }
       }
+
+      // Log warning if multiple choice has wrong number of options
+      if (type === 'multipleChoice' && options.length !== 4) {
+        console.warn(`[ExamParser] Multiple choice Q${number} has ${options.length} options (expected 4)`)
+      }
+
+      console.log(`[ExamParser] Final result: Q${number} with ${options.length} options`)
 
       return {
         id: `q-${number}`,

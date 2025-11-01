@@ -81,6 +81,11 @@ const electronAPI = {
   openExternalUrl: (url: string) => {
     return ipcRenderer.invoke('open-external-url', url)
   },
+
+  // Generate PDF from exam data
+  generateExamPDF: (examData: any, outputPath: string) => {
+    return ipcRenderer.invoke('generate-exam-pdf', examData, outputPath)
+  },
 }
 
 // Expose the API to renderer

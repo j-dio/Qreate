@@ -16,6 +16,7 @@ import path from 'path'
 import * as fs from 'fs/promises'
 import { FileTextExtractor } from './services/FileTextExtractor'
 import { GoogleDriveService } from './services/GoogleDriveService'
+import { PDFGenerator } from './services/PDFGenerator'
 
 // Global reference to prevent garbage collection
 let mainWindow: BrowserWindow | null = null
@@ -107,6 +108,7 @@ function registerIpcHandlers(): void {
   // Initialize services
   const fileTextExtractor = new FileTextExtractor()
   const googleDriveService = new GoogleDriveService()
+  const pdfGenerator = new PDFGenerator()
 
   /**
    * Open file dialog for selecting files
@@ -301,6 +303,31 @@ function registerIpcHandlers(): void {
     console.log('[IPC] Open external URL:', url)
     await shell.openExternal(url)
     return { success: true }
+  })
+
+  /**
+   * Generate PDF from exam data
+   *
+   * @param examData - Generated exam object
+   * @param outputPath - Relative or absolute path to save PDF
+   */
+  ipcMain.handle('generate-exam-pdf', async (_, examData: any, outputPath: string) => {
+    console.log('[IPC] Generate exam PDF:', outputPath)
+    try {
+      // Convert relative path to absolute if needed
+      const absolutePath = path.isAbsolute(outputPath)
+        ? outputPath
+        : path.join(process.cwd(), outputPath)
+
+      await pdfGenerator.generateExamPDF(examData, absolutePath)
+      return { success: true, path: absolutePath }
+    } catch (error) {
+      console.error('[IPC] Failed to generate PDF:', error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to generate PDF',
+      }
+    }
   })
 
   console.log('[IPC] Handlers registered successfully')
