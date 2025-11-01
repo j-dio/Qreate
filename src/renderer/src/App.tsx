@@ -13,6 +13,7 @@
  * - /create-exam/difficulty - Difficulty distribution (protected)
  * - /create-exam/review - Review & confirmation (protected)
  * - /create-exam/generate - Exam generation progress (protected)
+ * - /create-exam/success - Exam success & Google Drive export (protected)
  *
  * Protected Routes:
  * If user is not authenticated, they are redirected to /login
@@ -29,6 +30,7 @@ import { ExamTypeSelectionPage } from './pages/ExamTypeSelectionPage'
 import { DifficultyDistributionPage } from './pages/DifficultyDistributionPage'
 import { ReviewConfirmationPage } from './pages/ReviewConfirmationPage'
 import { ExamGenerationProgressPage } from './pages/ExamGenerationProgressPage'
+import { ExamSuccessPage } from './pages/ExamSuccessPage'
 import { useAppStore } from './store/useAppStore'
 
 /**
@@ -139,6 +141,14 @@ function App() {
           element={
             <ProtectedRoute>
               <ExamGenerationProgressPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/create-exam/success"
+          element={
+            <ProtectedRoute>
+              <ExamSuccessPage />
             </ProtectedRoute>
           }
         />

@@ -128,10 +128,11 @@ export function ExamGenerationProgressPage() {
     // Handle result
     if (result.success && result.exam) {
       setGeneratedExam(result.exam)
-      // TODO: Navigate to exam results page
+      // Navigate to success page with exam data
       setTimeout(() => {
-        alert('Exam generated successfully! (Results page coming soon)')
-        navigate('/')
+        navigate('/create-exam/success', {
+          state: { exam: result.exam },
+        })
       }, 2000)
     } else if (result.error) {
       setError({

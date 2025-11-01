@@ -209,6 +209,12 @@ export class GoogleDriveService {
   async exportToPDF(documentId: string, outputPath: string): Promise<void> {
     const drive = await this.getDriveClient()
 
+    // Ensure output directory exists
+    const dir = path.dirname(outputPath)
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true })
+    }
+
     // Export as PDF
     const response = await drive.files.export(
       {
