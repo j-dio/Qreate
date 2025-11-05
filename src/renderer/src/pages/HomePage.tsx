@@ -7,18 +7,39 @@
  * - List of recent projects
  * - Create new exam button
  * - Project statistics
+ * - Usage quota display (Groq backend)
  */
 
-import { Plus, FileText, Clock, CheckCircle2, AlertCircle } from 'lucide-react'
+import { Plus, FileText, Clock, CheckCircle2, Zap } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAppStore } from '../store/useAppStore'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
+import { useEffect, useState } from 'react'
+
+interface UsageStatus {
+  success: boolean
+  canGenerate: boolean
+  usage: {
+    examsToday: number
+    examsThisMonth: number
+    totalExams: number
+  }
+  limits: {
+    examsPerDay: number
+    examsPerMonth: number
+  }
+  resetTimes: {
+    dailyResetIn: number
+    monthlyResetIn: number
+  }
+}
 
 export function HomePage() {
   const navigate = useNavigate()
   const projects = useAppStore((state) => state.projects)
   const user = useAppStore((state) => state.user)
+  const [usageStatus, setUsageStatus] = useState<UsageStatus | null>(null)
 
   // Calculate statistics
   const stats = {
@@ -27,7 +48,21 @@ export function HomePage() {
     inProgress: projects.filter((p) => p.status === 'processing').length,
   }
 
-  const needsApiKeySetup = !user?.chatgptConnected
+  // Fetch usage status on mount
+  useEffect(() => {
+    const fetchUsageStatus = async () => {
+      try {
+        const result = await window.electron.groq.getUsageStatus()
+        if (result.success) {
+          setUsageStatus(result as UsageStatus)
+        }
+      } catch (error) {
+        console.error('[HomePage] Failed to fetch usage status:', error)
+      }
+    }
+
+    fetchUsageStatus()
+  }, [])
 
   return (
     <div className="space-y-8">
@@ -41,23 +76,32 @@ export function HomePage() {
         </p>
       </div>
 
-      {/* API Key Setup Banner */}
-      {needsApiKeySetup && (
-        <Card className="border-blue-200 bg-blue-50">
+      {/* Usage Quota Banner */}
+      {usageStatus && (
+        <Card className="border-green-200 bg-green-50">
           <CardContent className="flex items-center justify-between p-6">
             <div className="flex items-start gap-4">
-              <AlertCircle className="h-6 w-6 text-blue-600" />
+              <Zap className="h-6 w-6 text-green-600" />
               <div>
-                <h3 className="text-lg font-semibold text-blue-900">
-                  Connect your OpenAI API Key
-                </h3>
-                <p className="text-sm text-blue-700">
-                  To start generating exams, you need to connect your OpenAI API key. This allows
-                  Qreate to use ChatGPT to create custom exams from your materials.
+                <h3 className="text-lg font-semibold text-green-900">Free AI Exam Generation</h3>
+                <p className="text-sm text-green-700">
+                  <strong>
+                    {usageStatus.limits.examsPerDay - usageStatus.usage.examsToday}/
+                    {usageStatus.limits.examsPerDay}
+                  </strong>{' '}
+                  exams remaining today •{' '}
+                  <strong>
+                    {usageStatus.limits.examsPerMonth - usageStatus.usage.examsThisMonth}/
+                    {usageStatus.limits.examsPerMonth}
+                  </strong>{' '}
+                  this month • Resets in{' '}
+                  {Math.ceil(usageStatus.resetTimes.dailyResetIn / 3600000)} hours
                 </p>
               </div>
             </div>
-            <Button onClick={() => navigate('/settings')}>Connect Now</Button>
+            {usageStatus.usage.examsToday >= usageStatus.limits.examsPerDay && (
+              <span className="text-sm font-medium text-orange-600">Daily Limit Reached</span>
+            )}
           </CardContent>
         </Card>
       )}
@@ -75,20 +119,24 @@ export function HomePage() {
             size="lg"
             className="gap-2"
             onClick={() => {
-              if (needsApiKeySetup) {
-                // Warn user they need to connect API key first
-                if (
-                  confirm(
-                    'You need to connect your OpenAI API key before creating exams. Go to Settings now?'
-                  )
-                ) {
-                  navigate('/settings')
-                }
+              // Check quota before allowing navigation
+              if (
+                usageStatus &&
+                usageStatus.usage.examsToday >= usageStatus.limits.examsPerDay
+              ) {
+                alert(
+                  `Daily limit reached (${usageStatus.limits.examsPerDay} exams/day). Resets in ${Math.ceil(usageStatus.resetTimes.dailyResetIn / 3600000)} hours.`
+                )
               } else {
                 // Navigate to file upload page
                 navigate('/create-exam')
               }
             }}
+            disabled={
+              usageStatus
+                ? usageStatus.usage.examsToday >= usageStatus.limits.examsPerDay
+                : false
+            }
           >
             <Plus className="h-4 w-4" />
             New Exam

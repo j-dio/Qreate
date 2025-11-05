@@ -11,12 +11,20 @@
  * - Handle IPC communication with renderer
  */
 
+// Load environment variables first (before any other imports)
+import dotenv from 'dotenv'
+dotenv.config({ path: '.env.local' })
+
 import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
 import path from 'path'
 import * as fs from 'fs/promises'
 import { FileTextExtractor } from './services/FileTextExtractor'
 import { GoogleDriveService } from './services/GoogleDriveService'
 import { PDFGenerator } from './services/PDFGenerator'
+import { GroqProvider } from './services/GroqProvider'
+import { RateLimiter } from './services/RateLimiter'
+import { DatabaseService } from './services/DatabaseService'
+import { UsageTrackingService } from './services/UsageTrackingService'
 
 // Global reference to prevent garbage collection
 let mainWindow: BrowserWindow | null = null
@@ -109,6 +117,33 @@ function registerIpcHandlers(): void {
   const fileTextExtractor = new FileTextExtractor()
   const googleDriveService = new GoogleDriveService()
   const pdfGenerator = new PDFGenerator()
+
+  // Initialize database and usage tracking
+  const databaseService = new DatabaseService()
+  const usageTrackingService = new UsageTrackingService(databaseService)
+
+  // Create test user if doesn't exist (temporary until auth is implemented)
+  const testUser = databaseService.getUserByEmail('test@qreate.app')
+  if (!testUser) {
+    databaseService.createUser('test@qreate.app', 'test_hash')
+    console.log('[Database] Test user created')
+  }
+
+  // Initialize Groq provider (backend-managed)
+  let groqProvider: GroqProvider | null = null
+  const rateLimiter = new RateLimiter() // Global rate limiter instance
+
+  try {
+    const groqApiKey = process.env.GROQ_API_KEY
+    if (groqApiKey) {
+      groqProvider = new GroqProvider(groqApiKey)
+      console.log('[Groq] Provider initialized successfully')
+    } else {
+      console.warn('[Groq] API key not found in environment variables')
+    }
+  } catch (error) {
+    console.error('[Groq] Failed to initialize provider:', error)
+  }
 
   /**
    * Open file dialog for selecting files
@@ -326,6 +361,137 @@ function registerIpcHandlers(): void {
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to generate PDF',
+      }
+    }
+  })
+
+  /**
+   * Groq: Test connection
+   *
+   * Verifies Groq API is working (backend-managed, no API key needed from user)
+   */
+  ipcMain.handle('groq-test-connection', async () => {
+    console.log('[IPC] Test Groq connection')
+    if (!groqProvider) {
+      return {
+        success: false,
+        message: 'Groq provider not initialized',
+        details: 'Please set GROQ_API_KEY in .env.local',
+      }
+    }
+
+    try {
+      return await groqProvider.testConnection()
+    } catch (error) {
+      console.error('[IPC] Groq connection test failed:', error)
+      return {
+        success: false,
+        message: 'Connection test failed',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      }
+    }
+  })
+
+  /**
+   * Groq: Get usage status
+   *
+   * Returns current usage stats for the user (quotas, remaining, reset times)
+   *
+   * @param userId - User ID (optional, defaults to 1 for testing)
+   * @returns Usage status with quotas and stats
+   */
+  ipcMain.handle('groq-get-usage-status', async (_, userId: number = 1) => {
+    console.log('[IPC] Get usage status for user:', userId)
+
+    try {
+      const status = usageTrackingService.getUsageStatus(userId)
+      return {
+        success: true,
+        ...status,
+      }
+    } catch (error) {
+      console.error('[IPC] Failed to get usage status:', error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to get usage status',
+      }
+    }
+  })
+
+  /**
+   * Groq: Generate exam
+   *
+   * Backend-managed exam generation using Groq API.
+   * No API key required from user - handled server-side.
+   *
+   * Features:
+   * - Per-user quotas (10/day, 100/month)
+   * - Global rate limiting (30 req/min, 14.4k req/day)
+   * - Retry logic with exponential backoff
+   * - Usage tracking in SQLite database
+   *
+   * @param config - Exam configuration (types, difficulty, etc.)
+   * @param sourceText - Extracted text from uploaded files
+   * @param userId - User ID (optional, defaults to 1 for testing)
+   * @returns Generated exam content
+   */
+  ipcMain.handle('groq-generate-exam', async (_, config: any, sourceText: string, userId: number = 1) => {
+    console.log('[IPC] Generate exam with Groq:', {
+      userId,
+      totalQuestions: config.totalQuestions,
+      sourceTextLength: sourceText.length,
+    })
+
+    if (!groqProvider) {
+      return {
+        success: false,
+        error: 'Groq provider not initialized. Please contact support.',
+      }
+    }
+
+    // Check user quotas first
+    const usageCheck = usageTrackingService.checkUsage(userId, config.totalQuestions)
+    if (!usageCheck.canGenerate) {
+      console.warn('[UsageTracking] Request blocked:', usageCheck.reason)
+      return {
+        success: false,
+        error: usageCheck.reason,
+        usageStatus: usageCheck,
+      }
+    }
+
+    // Check global rate limits
+    const rateLimitCheck = rateLimiter.canMakeRequest()
+    if (!rateLimitCheck.allowed) {
+      console.warn('[RateLimiter] Request blocked:', rateLimitCheck.reason)
+      return {
+        success: false,
+        error: rateLimitCheck.reason,
+      }
+    }
+
+    try {
+      const examContent = await groqProvider.generateExam(config, sourceText)
+
+      // Record successful request for rate limiting
+      rateLimiter.recordRequest()
+
+      // Record exam generation for user quota tracking
+      usageTrackingService.recordExamGeneration(userId)
+
+      // Get updated usage status
+      const updatedUsage = usageTrackingService.getUsageStatus(userId)
+
+      return {
+        success: true,
+        content: examContent,
+        usageStatus: updatedUsage,
+      }
+    } catch (error) {
+      console.error('[IPC] Groq exam generation failed:', error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to generate exam',
       }
     }
   })

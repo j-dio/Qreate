@@ -86,6 +86,21 @@ const electronAPI = {
   generateExamPDF: (examData: any, outputPath: string) => {
     return ipcRenderer.invoke('generate-exam-pdf', examData, outputPath)
   },
+
+  // Groq AI operations (backend-managed)
+  groq: {
+    testConnection: () => {
+      return ipcRenderer.invoke('groq-test-connection')
+    },
+
+    generateExam: (config: any, sourceText: string, userId?: number) => {
+      return ipcRenderer.invoke('groq-generate-exam', config, sourceText, userId)
+    },
+
+    getUsageStatus: (userId?: number) => {
+      return ipcRenderer.invoke('groq-get-usage-status', userId)
+    },
+  },
 }
 
 // Expose the API to renderer

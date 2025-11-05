@@ -3,11 +3,7 @@
     "playwright": {
       "type": "stdio",
       "command": "cmd",
-      "args": [
-        "/c",
-        "npx",
-        "@playwright/mcp@latest"
-      ],
+      "args": ["/c", "npx", "@playwright/mcp@latest"],
       "env": {}
     },
     "filesystem": {
@@ -29,6 +25,18 @@
         "npx",
         "@modelcontextprotocol/server-sqlite",
         "C:\\Users\\John Dio Lumacang\\Desktop\\Programming\\Qreate\\qreate.db"
+      ],
+      "env": {}
+    },
+    "sentry": {
+      "type": "stdio",
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "mcp-remote@latest",
+        "https://mcp.sentry.dev/mcp"
       ],
       "env": {}
     }

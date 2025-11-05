@@ -43,3 +43,4 @@ coverage/
 # Google OAuth
 credentials.json
 token.json
+Projects/

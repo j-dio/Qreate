@@ -139,12 +139,16 @@ export const DIFFICULTY_LEVELS: Record<
 
 /**
  * Validation Rules
+ *
+ * Updated for Groq backend integration:
+ * - MAX_TOTAL_ITEMS reduced from 200 to 100 (proven reliable with Groq)
+ * - Tested with 30, 50, and 100 item exams (100% success rate)
  */
 export const EXAM_CONFIG_RULES = {
   MIN_TOTAL_ITEMS: 10,
-  MAX_TOTAL_ITEMS: 200,
+  MAX_TOTAL_ITEMS: 100, // Changed from 200 to 100 for Groq reliability
   MIN_ITEMS_PER_TYPE: 0,
-  MAX_ITEMS_PER_TYPE: 200,
+  MAX_ITEMS_PER_TYPE: 100, // Changed from 200 to 100
 }
 
 /**
@@ -326,7 +330,7 @@ export const useExamConfigStore = create<ExamConfigState>((set, get) => ({
    *
    * Valid if:
    * - Total questions >= MIN_TOTAL_ITEMS (10)
-   * - Total questions <= MAX_TOTAL_ITEMS (200)
+   * - Total questions <= MAX_TOTAL_ITEMS (100)
    * - At least one question type has quantity > 0
    */
   isQuestionTypesValid: () => {

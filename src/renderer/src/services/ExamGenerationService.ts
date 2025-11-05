@@ -192,6 +192,9 @@ export class ExamGenerationService {
 
   /**
    * Validate configuration before generation
+   *
+   * UPDATED FOR GROQ BACKEND:
+   * - Removed API key validation (backend-managed)
    */
   private validateConfiguration(): void {
     if (this.config.files.length === 0) {
@@ -202,9 +205,7 @@ export class ExamGenerationService {
       throw new Error('No questions configured')
     }
 
-    if (!this.config.apiKey) {
-      throw new Error('API key not provided')
-    }
+    // API key no longer required - Groq backend handles this
   }
 
   /**
@@ -257,6 +258,11 @@ export class ExamGenerationService {
 
   /**
    * Generate questions from a single file with retry logic
+   *
+   * UPDATED FOR GROQ BACKEND:
+   * - Now uses Groq backend API directly (no user API keys needed)
+   * - Backend handles rate limiting and retry logic
+   * - User quotas enforced server-side
    */
   private async generateQuestionsFromFile(
     provider: any,
@@ -269,8 +275,15 @@ export class ExamGenerationService {
       // Build exam config for this file
       const examConfig = this.buildExamConfig(questionsToGenerate)
 
-      // Call AI provider's generateExam method
-      const response = await provider.generateExam(examConfig, fileContent, this.config.apiKey)
+      // GROQ BACKEND: Call backend Groq API instead of user-provided AI
+      console.log('[ExamGenerationService] Using Groq backend for generation')
+      const groqResult = await window.electron.groq.generateExam(examConfig, fileContent)
+
+      if (!groqResult.success) {
+        throw new Error(groqResult.error || 'Groq generation failed')
+      }
+
+      const response = groqResult.content
 
       // Parse response
       const questions = this.parseAIResponse(response)
@@ -282,8 +295,12 @@ export class ExamGenerationService {
 
       return { questions, rawResponse: response }
     } catch (error) {
-      // Retry logic
-      if (retryCount < this.maxRetries) {
+      // Retry logic (only for non-quota errors)
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      const isQuotaError =
+        errorMessage.includes('limit reached') || errorMessage.includes('quota')
+
+      if (retryCount < this.maxRetries && !isQuotaError) {
         console.warn(
           `Generation failed for ${fileName}, retrying (${retryCount + 1}/${this.maxRetries})...`
         )
@@ -300,9 +317,9 @@ export class ExamGenerationService {
         )
       }
 
-      // Max retries exceeded
+      // Max retries exceeded or quota error
       throw new Error(
-        `Failed to generate questions from ${fileName} after ${this.maxRetries} attempts: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Failed to generate questions from ${fileName}${!isQuotaError ? ` after ${this.maxRetries} attempts` : ''}: ${errorMessage}`
       )
     }
   }

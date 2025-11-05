@@ -1,7 +1,15 @@
 {
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/John Dio Lumacang/Pictures/Screenshots/**)",
+      "Read(//c/Users/John Dio Lumacang/Downloads/**)"
+    ]
+  },
   "enabledMcpjsonServers": [
     "playwright",
     "filesystem",
-    "sqlite"
-  ]
+    "sqlite",
+    "sentry"
+  ],
+  "enableAllProjectMcpServers": true
 }

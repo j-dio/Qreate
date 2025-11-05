@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --ext .ts,.tsx",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
-    "package": "npm run build && electron-builder"
+    "package": "npm run build && electron-builder",
+    "postinstall": "electron-rebuild"
   },
   "repository": {
     "type": "git",
@@ -26,11 +27,14 @@
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "@xstate/react": "^6.0.0",
+    "better-sqlite3": "^12.4.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "dotenv": "^17.2.3",
     "electron": "^38.4.0",
     "electron-builder": "^26.0.12",
     "googleapis": "^164.1.0",
+    "groq-sdk": "^0.34.0",
     "lucide-react": "^0.548.0",
     "mammoth": "^1.11.0",
     "openai": "^6.7.0",
@@ -44,6 +48,8 @@
     "zustand": "^5.0.8"
   },
   "devDependencies": {
+    "@electron/rebuild": "^4.0.1",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^24.9.1",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
@@ -51,6 +57,7 @@
     "@typescript-eslint/parser": "^8.46.2",
     "@vitejs/plugin-react": "^5.1.0",
     "autoprefixer": "^10.4.21",
+    "electron-rebuild": "^3.2.9",
     "electron-vite": "^4.0.1",
     "eslint": "^9.38.0",
     "eslint-config-prettier": "^10.1.8",
