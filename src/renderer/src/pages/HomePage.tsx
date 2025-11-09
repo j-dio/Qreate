@@ -37,15 +37,15 @@ interface UsageStatus {
 
 export function HomePage() {
   const navigate = useNavigate()
-  const projects = useAppStore((state) => state.projects)
-  const user = useAppStore((state) => state.user)
+  const projects = useAppStore(state => state.projects)
+  const user = useAppStore(state => state.user)
   const [usageStatus, setUsageStatus] = useState<UsageStatus | null>(null)
 
   // Calculate statistics
   const stats = {
     total: projects.length,
-    completed: projects.filter((p) => p.status === 'completed').length,
-    inProgress: projects.filter((p) => p.status === 'processing').length,
+    completed: projects.filter(p => p.status === 'completed').length,
+    inProgress: projects.filter(p => p.status === 'processing').length,
   }
 
   // Fetch usage status on mount
@@ -71,9 +71,7 @@ export function HomePage() {
         <h2 className="text-3xl font-bold tracking-tight">
           Welcome{user ? `, ${user.name}` : ' to Qreate'}!
         </h2>
-        <p className="text-muted-foreground">
-          Create AI-powered exams from your study materials
-        </p>
+        <p className="text-muted-foreground">Create AI-powered exams from your study materials</p>
       </div>
 
       {/* Usage Quota Banner */}
@@ -94,8 +92,8 @@ export function HomePage() {
                     {usageStatus.limits.examsPerMonth - usageStatus.usage.examsThisMonth}/
                     {usageStatus.limits.examsPerMonth}
                   </strong>{' '}
-                  this month • Resets in{' '}
-                  {Math.ceil(usageStatus.resetTimes.dailyResetIn / 3600000)} hours
+                  this month • Resets in {Math.ceil(usageStatus.resetTimes.dailyResetIn / 3600000)}{' '}
+                  hours
                 </p>
               </div>
             </div>
@@ -120,10 +118,7 @@ export function HomePage() {
             className="gap-2"
             onClick={() => {
               // Check quota before allowing navigation
-              if (
-                usageStatus &&
-                usageStatus.usage.examsToday >= usageStatus.limits.examsPerDay
-              ) {
+              if (usageStatus && usageStatus.usage.examsToday >= usageStatus.limits.examsPerDay) {
                 alert(
                   `Daily limit reached (${usageStatus.limits.examsPerDay} exams/day). Resets in ${Math.ceil(usageStatus.resetTimes.dailyResetIn / 3600000)} hours.`
                 )
@@ -133,9 +128,7 @@ export function HomePage() {
               }
             }}
             disabled={
-              usageStatus
-                ? usageStatus.usage.examsToday >= usageStatus.limits.examsPerDay
-                : false
+              usageStatus ? usageStatus.usage.examsToday >= usageStatus.limits.examsPerDay : false
             }
           >
             <Plus className="h-4 w-4" />
@@ -197,7 +190,7 @@ export function HomePage() {
           </Card>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {projects.map((project) => (
+            {projects.map(project => (
               <Card key={project.id} className="hover:shadow-md transition-shadow cursor-pointer">
                 <CardHeader>
                   <CardTitle className="line-clamp-1">{project.name}</CardTitle>

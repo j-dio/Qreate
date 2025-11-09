@@ -24,8 +24,8 @@ interface AppLayoutProps {
 }
 
 export function AppLayout({ children }: AppLayoutProps) {
-  const user = useAppStore((state) => state.user)
-  const setUser = useAppStore((state) => state.setUser)
+  const user = useAppStore(state => state.user)
+  const setUser = useAppStore(state => state.setUser)
   const navigate = useNavigate()
 
   const handleLogout = () => {

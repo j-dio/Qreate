@@ -24,12 +24,10 @@ import { useExamConfigStore } from '../store/useExamConfigStore'
 import type { DifficultyLevel } from '../store/useExamConfigStore'
 
 export function DifficultyDistribution() {
-  const totalQuestions = useExamConfigStore((state) => state.getTotalQuestions())
-  const difficultyDistribution = useExamConfigStore((state) => state.difficultyDistribution)
-  const setDifficultyQuantity = useExamConfigStore((state) => state.setDifficultyQuantity)
-  const autoDistributeDifficulty = useExamConfigStore(
-    (state) => state.autoDistributeDifficulty
-  )
+  const totalQuestions = useExamConfigStore(state => state.getTotalQuestions())
+  const difficultyDistribution = useExamConfigStore(state => state.difficultyDistribution)
+  const setDifficultyQuantity = useExamConfigStore(state => state.setDifficultyQuantity)
+  const autoDistributeDifficulty = useExamConfigStore(state => state.autoDistributeDifficulty)
 
   // Calculate totals
   const totalDistributed = Object.values(difficultyDistribution).reduce((sum, val) => sum + val, 0)
@@ -79,11 +77,7 @@ export function DifficultyDistribution() {
           <span className="font-medium text-gray-700">Total Distributed</span>
           <span
             className={`font-semibold ${
-              isOver
-                ? 'text-red-600'
-                : isValid
-                  ? 'text-green-600'
-                  : 'text-gray-600'
+              isOver ? 'text-red-600' : isValid ? 'text-green-600' : 'text-gray-600'
             }`}
           >
             {totalDistributed} / {totalQuestions}
@@ -93,7 +87,8 @@ export function DifficultyDistribution() {
         {/* Visual Progress Bar */}
         <div className="h-3 w-full bg-gray-200 rounded-full overflow-hidden flex">
           {difficultyLevels.map(({ key, color }) => {
-            const percentage = totalQuestions > 0 ? (difficultyDistribution[key] / totalQuestions) * 100 : 0
+            const percentage =
+              totalQuestions > 0 ? (difficultyDistribution[key] / totalQuestions) * 100 : 0
             if (difficultyDistribution[key] === 0) return null
 
             return (
@@ -109,11 +104,7 @@ export function DifficultyDistribution() {
 
         {/* Status Message */}
         {!isValid && (
-          <div
-            className={`text-sm font-medium ${
-              isOver ? 'text-red-600' : 'text-orange-600'
-            }`}
-          >
+          <div className={`text-sm font-medium ${isOver ? 'text-red-600' : 'text-orange-600'}`}>
             {isOver
               ? `Over by ${Math.abs(remaining)} question${Math.abs(remaining) !== 1 ? 's' : ''}. Reduce some values.`
               : `${remaining} question${remaining !== 1 ? 's' : ''} remaining to distribute.`}
@@ -122,12 +113,7 @@ export function DifficultyDistribution() {
 
         {isValid && (
           <div className="flex items-center gap-2 text-sm font-medium text-green-600">
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -143,7 +129,8 @@ export function DifficultyDistribution() {
       {/* Difficulty Sliders */}
       <div className="space-y-4">
         {difficultyLevels.map(({ key, label, color }) => {
-          const percentage = totalQuestions > 0 ? (difficultyDistribution[key] / totalQuestions) * 100 : 0
+          const percentage =
+            totalQuestions > 0 ? (difficultyDistribution[key] / totalQuestions) * 100 : 0
 
           return (
             <DifficultySlider
@@ -151,7 +138,7 @@ export function DifficultyDistribution() {
               label={label}
               value={difficultyDistribution[key]}
               max={totalQuestions}
-              onChange={(value) => setDifficultyQuantity(key, value)}
+              onChange={value => setDifficultyQuantity(key, value)}
               color={color}
               percentage={percentage}
             />

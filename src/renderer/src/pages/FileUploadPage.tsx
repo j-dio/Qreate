@@ -38,7 +38,7 @@ import { useFileUploadStore } from '../store/useFileUploadStore'
 
 export function FileUploadPage() {
   const navigate = useNavigate()
-  const uploadedFiles = useFileUploadStore((state) => state.uploadedFiles)
+  const uploadedFiles = useFileUploadStore(state => state.uploadedFiles)
 
   /**
    * Check if user can proceed to next step
@@ -52,7 +52,7 @@ export function FileUploadPage() {
    * - Ensures all files passed validation
    * - Follows "foolproofing" principle from CLAUDE.md
    */
-  const canProceed = uploadedFiles.length > 0 && uploadedFiles.every((f) => f.status === 'valid')
+  const canProceed = uploadedFiles.length > 0 && uploadedFiles.every(f => f.status === 'valid')
 
   /**
    * Get validation status message
@@ -64,12 +64,12 @@ export function FileUploadPage() {
       return 'Upload at least one file to continue'
     }
 
-    const invalidFiles = uploadedFiles.filter((f) => f.status === 'invalid')
+    const invalidFiles = uploadedFiles.filter(f => f.status === 'invalid')
     if (invalidFiles.length > 0) {
       return `Remove ${invalidFiles.length} invalid file(s) to continue`
     }
 
-    const pendingFiles = uploadedFiles.filter((f) => f.status === 'pending')
+    const pendingFiles = uploadedFiles.filter(f => f.status === 'pending')
     if (pendingFiles.length > 0) {
       return `Validating ${pendingFiles.length} file(s)...`
     }

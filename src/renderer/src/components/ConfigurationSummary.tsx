@@ -23,10 +23,10 @@ export function ConfigurationSummary() {
   const navigate = useNavigate()
 
   // Get state from stores
-  const uploadedFiles = useFileUploadStore((state) => state.uploadedFiles)
-  const questionTypes = useExamConfigStore((state) => state.questionTypes)
-  const difficultyDistribution = useExamConfigStore((state) => state.difficultyDistribution)
-  const totalQuestions = useExamConfigStore((state) => state.getTotalQuestions())
+  const uploadedFiles = useFileUploadStore(state => state.uploadedFiles)
+  const questionTypes = useExamConfigStore(state => state.questionTypes)
+  const difficultyDistribution = useExamConfigStore(state => state.difficultyDistribution)
+  const totalQuestions = useExamConfigStore(state => state.getTotalQuestions())
 
   // Format file size
   const formatFileSize = (bytes: number): string => {
@@ -98,7 +98,7 @@ export function ConfigurationSummary() {
         </CardHeader>
         <CardContent>
           <div className="space-y-2">
-            {uploadedFiles.map((file) => (
+            {uploadedFiles.map(file => (
               <div
                 key={file.id}
                 className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
@@ -112,9 +112,7 @@ export function ConfigurationSummary() {
                     <p className="text-xs text-gray-500">{formatFileSize(file.size)}</p>
                   </div>
                 </div>
-                {file.status === 'valid' && (
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                )}
+                {file.status === 'valid' && <CheckCircle className="h-4 w-4 text-green-600" />}
               </div>
             ))}
           </div>
@@ -145,7 +143,10 @@ export function ConfigurationSummary() {
             {(Object.entries(questionTypes) as [QuestionType, number][])
               .filter(([_, count]) => count > 0)
               .map(([type, count]) => (
-                <div key={type} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div
+                  key={type}
+                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                >
                   <span className="text-sm font-medium text-gray-700">
                     {getQuestionTypeLabel(type)}
                   </span>

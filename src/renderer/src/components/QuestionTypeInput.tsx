@@ -167,9 +167,7 @@ export function QuestionTypeInput({
   return (
     <Card
       className={`transition-all ${
-        isActive
-          ? 'border-blue-500 bg-blue-50 shadow-sm'
-          : 'border-gray-200 hover:border-gray-300'
+        isActive ? 'border-blue-500 bg-blue-50 shadow-sm' : 'border-gray-200 hover:border-gray-300'
       } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
     >
       <CardContent className="p-4">

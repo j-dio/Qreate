@@ -107,21 +107,31 @@ export class ExamParser {
     console.log('[ExamParser] Extracted topic:', topic)
 
     // Try multiple variations of section headers (case-insensitive, flexible dashes)
-    let examContentMatch = examText.match(/----+\s*Exam Content\s*----+\s*([\s\S]*?)(?:----+\s*Answer Key\s*----+|\[PAGE BREAK\])/i)
+    let examContentMatch = examText.match(
+      /----+\s*Exam Content\s*----+\s*([\s\S]*?)(?:----+\s*Answer Key\s*----+|\[PAGE BREAK\])/i
+    )
 
     // If not found, try without dashes
     if (!examContentMatch) {
       console.log('[ExamParser] Standard format not found, trying alternative formats...')
-      examContentMatch = examText.match(/Exam Content[:\s]*([\s\S]*?)(?:Answer Key[:\s]|\[PAGE BREAK\])/i)
+      examContentMatch = examText.match(
+        /Exam Content[:\s]*([\s\S]*?)(?:Answer Key[:\s]|\[PAGE BREAK\])/i
+      )
     }
 
     // If still not found, try to split by "Multiple Choice:" as the start of content
     if (!examContentMatch) {
-      console.log('[ExamParser] Alternative format not found, trying to extract from Multiple Choice onwards...')
-      examContentMatch = examText.match(/(?:Multiple Choice|True\/False|Fill in|Short Answer|Essay|Matching|Identification)[:\s]*([\s\S]*?)(?:Answer Key[:\s]|\[PAGE BREAK\]|$)/i)
+      console.log(
+        '[ExamParser] Alternative format not found, trying to extract from Multiple Choice onwards...'
+      )
+      examContentMatch = examText.match(
+        /(?:Multiple Choice|True\/False|Fill in|Short Answer|Essay|Matching|Identification)[:\s]*([\s\S]*?)(?:Answer Key[:\s]|\[PAGE BREAK\]|$)/i
+      )
       if (examContentMatch) {
         // Prepend the question type header we found
-        const fullMatch = examText.match(/((?:Multiple Choice|True\/False|Fill in|Short Answer|Essay|Matching|Identification)[:\s]*[\s\S]*?)(?:Answer Key[:\s]|\[PAGE BREAK\]|$)/i)
+        const fullMatch = examText.match(
+          /((?:Multiple Choice|True\/False|Fill in|Short Answer|Essay|Matching|Identification)[:\s]*[\s\S]*?)(?:Answer Key[:\s]|\[PAGE BREAK\]|$)/i
+        )
         if (fullMatch) {
           examContentMatch[1] = fullMatch[1]
         }
@@ -169,7 +179,9 @@ export class ExamParser {
   /**
    * Split content by question type headers (e.g., "Multiple Choice:", "True/False:")
    */
-  private splitByQuestionType(content: string): Array<{ type: GeneratedQuestion['type']; content: string }> {
+  private splitByQuestionType(
+    content: string
+  ): Array<{ type: GeneratedQuestion['type']; content: string }> {
     const sections: Array<{ type: GeneratedQuestion['type']; content: string }> = []
 
     console.log('[ExamParser] ========== SPLITTING BY QUESTION TYPE ==========')
@@ -192,7 +204,9 @@ export class ExamParser {
         // Save previous section
         if (currentType && currentContent.length > 0) {
           const sectionContent = currentContent.join('\n').trim()
-          console.log(`[ExamParser] Saving previous section (${currentType}): ${sectionContent.length} characters`)
+          console.log(
+            `[ExamParser] Saving previous section (${currentType}): ${sectionContent.length} characters`
+          )
           console.log(`[ExamParser] Section preview:`, sectionContent.substring(0, 300))
 
           sections.push({
@@ -213,7 +227,9 @@ export class ExamParser {
     // Save final section
     if (currentType && currentContent.length > 0) {
       const sectionContent = currentContent.join('\n').trim()
-      console.log(`[ExamParser] Saving final section (${currentType}): ${sectionContent.length} characters`)
+      console.log(
+        `[ExamParser] Saving final section (${currentType}): ${sectionContent.length} characters`
+      )
       console.log(`[ExamParser] Section preview:`, sectionContent.substring(0, 300))
 
       sections.push({
@@ -298,7 +314,9 @@ export class ExamParser {
         // Start new question
         currentQuestionNumber = parseInt(questionMatch[1], 10)
         currentQuestionLines = [questionMatch[2]] // Start with the question text (after the number)
-        console.log(`[ExamParser] Found question ${currentQuestionNumber}: "${questionMatch[2].substring(0, 50)}..."`)
+        console.log(
+          `[ExamParser] Found question ${currentQuestionNumber}: "${questionMatch[2].substring(0, 50)}..."`
+        )
       } else if (currentQuestionNumber !== null) {
         // Add this line to the current question
         currentQuestionLines.push(line)
@@ -356,7 +374,9 @@ export class ExamParser {
 
         if (optionMatch) {
           options.push(optionMatch[2].trim())
-          console.log(`[ExamParser] ✓ Matched! Letter: ${optionMatch[1]}, Text: ${optionMatch[2].trim()}`)
+          console.log(
+            `[ExamParser] ✓ Matched! Letter: ${optionMatch[1]}, Text: ${optionMatch[2].trim()}`
+          )
         } else {
           console.log(`[ExamParser] ✗ No match for this line`)
         }
@@ -364,7 +384,9 @@ export class ExamParser {
 
       // Log warning if multiple choice has wrong number of options
       if (type === 'multipleChoice' && options.length !== 4) {
-        console.warn(`[ExamParser] Multiple choice Q${number} has ${options.length} options (expected 4)`)
+        console.warn(
+          `[ExamParser] Multiple choice Q${number} has ${options.length} options (expected 4)`
+        )
       }
 
       console.log(`[ExamParser] Final result: Q${number} with ${options.length} options`)

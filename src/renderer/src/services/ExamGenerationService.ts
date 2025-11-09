@@ -297,8 +297,7 @@ export class ExamGenerationService {
     } catch (error) {
       // Retry logic (only for non-quota errors)
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      const isQuotaError =
-        errorMessage.includes('limit reached') || errorMessage.includes('quota')
+      const isQuotaError = errorMessage.includes('limit reached') || errorMessage.includes('quota')
 
       if (retryCount < this.maxRetries && !isQuotaError) {
         console.warn(
@@ -424,7 +423,7 @@ export class ExamGenerationService {
       createdAt: new Date(),
       totalQuestions: questions.length,
       metadata: {
-        sourceFiles: this.config.files.map((f) => f.name),
+        sourceFiles: this.config.files.map(f => f.name),
         aiProvider: this.config.aiProvider,
         generationTime: 0, // TODO: Track actual generation time
       },
@@ -435,6 +434,6 @@ export class ExamGenerationService {
    * Helper: Sleep for specified milliseconds
    */
   private sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms))
+    return new Promise(resolve => setTimeout(resolve, ms))
   }
 }

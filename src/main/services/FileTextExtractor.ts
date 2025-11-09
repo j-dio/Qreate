@@ -223,7 +223,7 @@ export class FileTextExtractor {
    */
   private countWords(text: string): number {
     // Split by whitespace and filter empty strings
-    const words = text.split(/\s+/).filter((word) => word.length > 0)
+    const words = text.split(/\s+/).filter(word => word.length > 0)
     return words.length
   }
 }

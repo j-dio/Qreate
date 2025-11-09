@@ -30,11 +30,11 @@ export function ReviewConfirmationPage() {
   const navigate = useNavigate()
 
   // Get state from stores
-  const uploadedFiles = useFileUploadStore((state) => state.uploadedFiles)
-  const totalQuestions = useExamConfigStore((state) => state.getTotalQuestions())
-  const difficultyDistribution = useExamConfigStore((state) => state.difficultyDistribution)
-  const selectedAIProvider = useAppStore((state) => state.selectedAIProvider)
-  const apiCredentials = useAppStore((state) => state.apiCredentials)
+  const uploadedFiles = useFileUploadStore(state => state.uploadedFiles)
+  const totalQuestions = useExamConfigStore(state => state.getTotalQuestions())
+  const difficultyDistribution = useExamConfigStore(state => state.difficultyDistribution)
+  const selectedAIProvider = useAppStore(state => state.selectedAIProvider)
+  const apiCredentials = useAppStore(state => state.apiCredentials)
 
   // Get provider config
   const providerConfig = AI_PROVIDERS[selectedAIProvider]
@@ -61,7 +61,10 @@ export function ReviewConfirmationPage() {
     }
 
     // Must have completed difficulty distribution
-    const totalDistributed = Object.values(difficultyDistribution).reduce((sum, val) => sum + val, 0)
+    const totalDistributed = Object.values(difficultyDistribution).reduce(
+      (sum, val) => sum + val,
+      0
+    )
     if (totalDistributed !== totalQuestions) {
       navigate('/create-exam/difficulty')
       return
@@ -70,8 +73,9 @@ export function ReviewConfirmationPage() {
 
   // Calculate estimates
   const estimatedProcessingTime = Math.ceil(uploadedFiles.length * 30) // ~30 seconds per file
-  const estimatedCost =
-    providerConfig.features.isFree ? 'Free' : `~$${(totalQuestions * 0.001).toFixed(3)}`
+  const estimatedCost = providerConfig.features.isFree
+    ? 'Free'
+    : `~$${(totalQuestions * 0.001).toFixed(3)}`
 
   const handleBack = () => {
     navigate('/create-exam/difficulty')
@@ -145,18 +149,12 @@ export function ReviewConfirmationPage() {
                 <Sparkles className="h-5 w-5 text-blue-600" />
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-900">
-                  Using {providerConfig.name}
-                </p>
+                <p className="text-sm font-medium text-gray-900">Using {providerConfig.name}</p>
                 <p className="text-xs text-gray-600">{providerConfig.description}</p>
               </div>
             </div>
             {!isAIConnected && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => navigate('/settings')}
-              >
+              <Button variant="outline" size="sm" onClick={() => navigate('/settings')}>
                 Connect
               </Button>
             )}

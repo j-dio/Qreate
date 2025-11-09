@@ -46,12 +46,12 @@ export function ExamGenerationProgressPage() {
     reset: resetGeneration,
   } = useExamGenerationStore()
 
-  const uploadedFiles = useFileUploadStore((state) => state.uploadedFiles)
-  const questionTypes = useExamConfigStore((state) => state.questionTypes)
-  const difficultyDistribution = useExamConfigStore((state) => state.difficultyDistribution)
-  const totalQuestions = useExamConfigStore((state) => state.getTotalQuestions())
-  const selectedAIProvider = useAppStore((state) => state.selectedAIProvider)
-  const apiCredentials = useAppStore((state) => state.apiCredentials)
+  const uploadedFiles = useFileUploadStore(state => state.uploadedFiles)
+  const questionTypes = useExamConfigStore(state => state.questionTypes)
+  const difficultyDistribution = useExamConfigStore(state => state.difficultyDistribution)
+  const totalQuestions = useExamConfigStore(state => state.getTotalQuestions())
+  const selectedAIProvider = useAppStore(state => state.selectedAIProvider)
+  const apiCredentials = useAppStore(state => state.apiCredentials)
 
   // Validate user came from proper workflow
   useEffect(() => {
@@ -121,7 +121,7 @@ export function ExamGenerationProgressPage() {
     })
 
     // Generate exam with progress callback
-    const result = await service.generate((progressUpdate) => {
+    const result = await service.generate(progressUpdate => {
       updateProgress(progressUpdate)
     })
 

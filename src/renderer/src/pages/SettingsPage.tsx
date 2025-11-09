@@ -33,7 +33,7 @@ interface UsageStatus {
 
 export function SettingsPage() {
   const navigate = useNavigate()
-  const user = useAppStore((state) => state.user)
+  const user = useAppStore(state => state.user)
   const [usageStatus, setUsageStatus] = useState<UsageStatus | null>(null)
 
   // Fetch usage status on mount
@@ -57,9 +57,7 @@ export function SettingsPage() {
       {/* Page Header */}
       <div>
         <h2 className="text-3xl font-bold tracking-tight">Settings</h2>
-        <p className="text-muted-foreground">
-          Manage your account and view usage statistics
-        </p>
+        <p className="text-muted-foreground">Manage your account and view usage statistics</p>
       </div>
 
       {/* AI Provider Info */}
@@ -112,9 +110,7 @@ export function SettingsPage() {
               <TrendingUp className="h-5 w-5" />
               Usage Statistics
             </CardTitle>
-            <CardDescription>
-              Track your exam generation usage and quota limits
-            </CardDescription>
+            <CardDescription>Track your exam generation usage and quota limits</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             {/* Daily Usage */}
@@ -156,9 +152,7 @@ export function SettingsPage() {
                   <Calendar className="h-4 w-4 text-purple-500" />
                   <span className="font-medium">This Month</span>
                 </div>
-                <span className="text-sm text-muted-foreground">
-                  Resets on the 1st
-                </span>
+                <span className="text-sm text-muted-foreground">Resets on the 1st</span>
               </div>
 
               {/* Progress bar */}

@@ -218,7 +218,7 @@ export function validateFiles(
 export function getAllowedFileTypesDescription(): string {
   const extensions = Object.values(VALIDATION_RULES.ALLOWED_TYPES)
     .flat()
-    .map((ext) => ext.toUpperCase())
+    .map(ext => ext.toUpperCase())
   return extensions.join(', ')
 }
 

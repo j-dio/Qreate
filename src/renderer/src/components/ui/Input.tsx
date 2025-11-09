@@ -55,12 +55,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
 
         {/* Helper Text or Error Message */}
         {(helperText || error) && (
-          <p
-            className={cn(
-              'text-xs',
-              error ? 'text-destructive' : 'text-muted-foreground'
-            )}
-          >
+          <p className={cn('text-xs', error ? 'text-destructive' : 'text-muted-foreground')}>
             {error || helperText}
           </p>
         )}

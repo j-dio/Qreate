@@ -135,9 +135,7 @@ export class GeminiProvider implements IAIProvider {
       return examContent
     } catch (error: any) {
       // Re-throw with user-friendly message
-      throw new Error(
-        `Failed to generate exam: ${error.message || 'Unknown error'}`
-      )
+      throw new Error(`Failed to generate exam: ${error.message || 'Unknown error'}`)
     }
   }
 

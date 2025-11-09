@@ -214,7 +214,7 @@ export const examMachine = createMachine(
       removeFile: assign({
         files: ({ context, event }) => {
           if (event.type !== 'REMOVE_FILE') return context.files
-          return context.files.filter((f) => f.id !== event.fileId)
+          return context.files.filter(f => f.id !== event.fileId)
         },
       }),
       setExamTypes: assign({
@@ -252,10 +252,7 @@ export const examMachine = createMachine(
       },
       difficultyMatchesTotal: ({ context }) => {
         const examTotal = Object.values(context.examTypes).reduce((sum, val) => sum + val, 0)
-        const difficultyTotal = Object.values(context.difficulty).reduce(
-          (sum, val) => sum + val,
-          0
-        )
+        const difficultyTotal = Object.values(context.difficulty).reduce((sum, val) => sum + val, 0)
         return examTotal === difficultyTotal
       },
     },
@@ -263,7 +260,7 @@ export const examMachine = createMachine(
       // Placeholder - will implement actual API call later
       generateExams: fromPromise(async () => {
         // Simulate API call
-        await new Promise((resolve) => setTimeout(resolve, 2000))
+        await new Promise(resolve => setTimeout(resolve, 2000))
         return [
           {
             id: '1',

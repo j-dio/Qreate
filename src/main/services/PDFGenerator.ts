@@ -86,12 +86,10 @@ export class PDFGenerator {
     })
 
     // Load HTML content
-    await win.loadURL(
-      `data:text/html;charset=utf-8,${encodeURIComponent(html)}`
-    )
+    await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`)
 
     // Wait for content to render
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    await new Promise(resolve => setTimeout(resolve, 1000))
 
     // Generate PDF
     const pdfData = await win.webContents.printToPDF({
@@ -395,6 +393,6 @@ export class PDFGenerator {
       '"': '&quot;',
       "'": '&#39;',
     }
-    return text.replace(/[&<>"']/g, (char) => map[char])
+    return text.replace(/[&<>"']/g, char => map[char])
   }
 }

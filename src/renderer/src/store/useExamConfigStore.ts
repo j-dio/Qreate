@@ -244,12 +244,9 @@ export const useExamConfigStore = create<ExamConfigState>((set, get) => ({
    * - Total must be <= MAX_TOTAL_ITEMS
    */
   setQuestionTypeQuantity: (type, quantity) =>
-    set((state) => {
+    set(state => {
       // Validate quantity
-      const validQuantity = Math.max(
-        0,
-        Math.min(quantity, EXAM_CONFIG_RULES.MAX_ITEMS_PER_TYPE)
-      )
+      const validQuantity = Math.max(0, Math.min(quantity, EXAM_CONFIG_RULES.MAX_ITEMS_PER_TYPE))
 
       // Calculate new total
       const newQuestionTypes = {
@@ -280,7 +277,7 @@ export const useExamConfigStore = create<ExamConfigState>((set, get) => ({
    * Set quantity for a specific difficulty level
    */
   setDifficultyQuantity: (level, quantity) =>
-    set((state) => ({
+    set(state => ({
       difficultyDistribution: {
         ...state.difficultyDistribution,
         [level]: Math.max(0, quantity),
@@ -297,7 +294,7 @@ export const useExamConfigStore = create<ExamConfigState>((set, get) => ({
    * - Hard: 20%
    * - Very Hard: 10%
    */
-  autoDistributeDifficulty: (total) => {
+  autoDistributeDifficulty: total => {
     const veryEasy = Math.round(total * 0.2)
     const easy = Math.round(total * 0.2)
     const moderate = Math.round(total * 0.3)
@@ -335,10 +332,7 @@ export const useExamConfigStore = create<ExamConfigState>((set, get) => ({
    */
   isQuestionTypesValid: () => {
     const total = get().getTotalQuestions()
-    return (
-      total >= EXAM_CONFIG_RULES.MIN_TOTAL_ITEMS &&
-      total <= EXAM_CONFIG_RULES.MAX_TOTAL_ITEMS
-    )
+    return total >= EXAM_CONFIG_RULES.MIN_TOTAL_ITEMS && total <= EXAM_CONFIG_RULES.MAX_TOTAL_ITEMS
   },
 
   /**

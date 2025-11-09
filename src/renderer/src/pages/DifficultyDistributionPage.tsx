@@ -28,9 +28,9 @@ export function DifficultyDistributionPage() {
   const navigate = useNavigate()
 
   // Get state from stores
-  const totalQuestions = useExamConfigStore((state) => state.getTotalQuestions())
-  const difficultyDistribution = useExamConfigStore((state) => state.difficultyDistribution)
-  const uploadedFiles = useFileUploadStore((state) => state.uploadedFiles)
+  const totalQuestions = useExamConfigStore(state => state.getTotalQuestions())
+  const difficultyDistribution = useExamConfigStore(state => state.difficultyDistribution)
+  const uploadedFiles = useFileUploadStore(state => state.uploadedFiles)
 
   // Validate that user came from proper workflow
   useEffect(() => {

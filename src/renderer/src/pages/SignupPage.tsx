@@ -31,15 +31,15 @@ interface PasswordRequirement {
 }
 
 const passwordRequirements: PasswordRequirement[] = [
-  { label: 'At least 8 characters', test: (pw) => pw.length >= 8 },
-  { label: 'One uppercase letter', test: (pw) => /[A-Z]/.test(pw) },
-  { label: 'One number', test: (pw) => /[0-9]/.test(pw) },
-  { label: 'One special character', test: (pw) => /[!@#$%^&*(),.?":{}|<>]/.test(pw) },
+  { label: 'At least 8 characters', test: pw => pw.length >= 8 },
+  { label: 'One uppercase letter', test: pw => /[A-Z]/.test(pw) },
+  { label: 'One number', test: pw => /[0-9]/.test(pw) },
+  { label: 'One special character', test: pw => /[!@#$%^&*(),.?":{}|<>]/.test(pw) },
 ]
 
 export function SignupPage() {
   const navigate = useNavigate()
-  const setUser = useAppStore((state) => state.setUser)
+  const setUser = useAppStore(state => state.setUser)
 
   const [formData, setFormData] = useState({
     name: '',
@@ -78,9 +78,7 @@ export function SignupPage() {
     if (!formData.password) {
       newErrors.password = 'Password is required'
     } else {
-      const failedRequirements = passwordRequirements.filter(
-        (req) => !req.test(formData.password)
-      )
+      const failedRequirements = passwordRequirements.filter(req => !req.test(formData.password))
       if (failedRequirements.length > 0) {
         newErrors.password = 'Password does not meet requirements'
       }
@@ -108,7 +106,7 @@ export function SignupPage() {
     try {
       // TODO: Replace with actual registration API call
       // For now, we'll simulate a registration
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      await new Promise(resolve => setTimeout(resolve, 1000))
 
       // Mock successful registration
       setUser({
@@ -131,7 +129,7 @@ export function SignupPage() {
   }
 
   const updateField = (field: keyof typeof formData, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }))
+    setFormData(prev => ({ ...prev, [field]: value }))
   }
 
   return (
@@ -167,7 +165,7 @@ export function SignupPage() {
                 type="text"
                 placeholder="John Doe"
                 value={formData.name}
-                onChange={(e) => updateField('name', e.target.value)}
+                onChange={e => updateField('name', e.target.value)}
                 error={errors.name}
                 disabled={isLoading}
               />
@@ -178,7 +176,7 @@ export function SignupPage() {
                 type="email"
                 placeholder="you@example.com"
                 value={formData.email}
-                onChange={(e) => updateField('email', e.target.value)}
+                onChange={e => updateField('email', e.target.value)}
                 error={errors.email}
                 disabled={isLoading}
               />
@@ -190,7 +188,7 @@ export function SignupPage() {
                   type="password"
                   placeholder="Create a strong password"
                   value={formData.password}
-                  onChange={(e) => updateField('password', e.target.value)}
+                  onChange={e => updateField('password', e.target.value)}
                   onFocus={() => setShowPasswordRequirements(true)}
                   error={errors.password}
                   disabled={isLoading}
@@ -211,11 +209,7 @@ export function SignupPage() {
                             isMet ? 'text-green-600' : 'text-muted-foreground'
                           }`}
                         >
-                          {isMet ? (
-                            <Check className="h-3 w-3" />
-                          ) : (
-                            <X className="h-3 w-3" />
-                          )}
+                          {isMet ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
                           <span>{req.label}</span>
                         </div>
                       )
@@ -230,7 +224,7 @@ export function SignupPage() {
                 type="password"
                 placeholder="Re-enter your password"
                 value={formData.confirmPassword}
-                onChange={(e) => updateField('confirmPassword', e.target.value)}
+                onChange={e => updateField('confirmPassword', e.target.value)}
                 error={errors.confirmPassword}
                 disabled={isLoading}
               />

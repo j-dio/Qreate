@@ -218,7 +218,7 @@ export class GroqProvider {
         console.log(`[Groq] Retrying in ${delay}ms...`)
 
         // Wait before retry
-        await new Promise((resolve) => setTimeout(resolve, delay))
+        await new Promise(resolve => setTimeout(resolve, delay))
       }
     }
 

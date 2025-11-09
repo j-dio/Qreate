@@ -167,7 +167,7 @@ function registerIpcHandlers(): void {
 
     // Get file stats for each selected file
     const fileStats = await Promise.all(
-      result.filePaths.map(async (filePath) => {
+      result.filePaths.map(async filePath => {
         const stats = await fs.stat(filePath)
         const ext = path.extname(filePath).toLowerCase()
 
@@ -435,66 +435,69 @@ function registerIpcHandlers(): void {
    * @param userId - User ID (optional, defaults to 1 for testing)
    * @returns Generated exam content
    */
-  ipcMain.handle('groq-generate-exam', async (_, config: any, sourceText: string, userId: number = 1) => {
-    console.log('[IPC] Generate exam with Groq:', {
-      userId,
-      totalQuestions: config.totalQuestions,
-      sourceTextLength: sourceText.length,
-    })
+  ipcMain.handle(
+    'groq-generate-exam',
+    async (_, config: any, sourceText: string, userId: number = 1) => {
+      console.log('[IPC] Generate exam with Groq:', {
+        userId,
+        totalQuestions: config.totalQuestions,
+        sourceTextLength: sourceText.length,
+      })
 
-    if (!groqProvider) {
-      return {
-        success: false,
-        error: 'Groq provider not initialized. Please contact support.',
+      if (!groqProvider) {
+        return {
+          success: false,
+          error: 'Groq provider not initialized. Please contact support.',
+        }
+      }
+
+      // Check user quotas first
+      const usageCheck = usageTrackingService.checkUsage(userId, config.totalQuestions)
+      if (!usageCheck.canGenerate) {
+        console.warn('[UsageTracking] Request blocked:', usageCheck.reason)
+        return {
+          success: false,
+          error: usageCheck.reason,
+          usageStatus: usageCheck,
+        }
+      }
+
+      // Check global rate limits
+      const rateLimitCheck = rateLimiter.canMakeRequest()
+      if (!rateLimitCheck.allowed) {
+        console.warn('[RateLimiter] Request blocked:', rateLimitCheck.reason)
+        return {
+          success: false,
+          error: rateLimitCheck.reason,
+        }
+      }
+
+      try {
+        const examContent = await groqProvider.generateExam(config, sourceText)
+
+        // Record successful request for rate limiting
+        rateLimiter.recordRequest()
+
+        // Record exam generation for user quota tracking
+        usageTrackingService.recordExamGeneration(userId)
+
+        // Get updated usage status
+        const updatedUsage = usageTrackingService.getUsageStatus(userId)
+
+        return {
+          success: true,
+          content: examContent,
+          usageStatus: updatedUsage,
+        }
+      } catch (error) {
+        console.error('[IPC] Groq exam generation failed:', error)
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to generate exam',
+        }
       }
     }
-
-    // Check user quotas first
-    const usageCheck = usageTrackingService.checkUsage(userId, config.totalQuestions)
-    if (!usageCheck.canGenerate) {
-      console.warn('[UsageTracking] Request blocked:', usageCheck.reason)
-      return {
-        success: false,
-        error: usageCheck.reason,
-        usageStatus: usageCheck,
-      }
-    }
-
-    // Check global rate limits
-    const rateLimitCheck = rateLimiter.canMakeRequest()
-    if (!rateLimitCheck.allowed) {
-      console.warn('[RateLimiter] Request blocked:', rateLimitCheck.reason)
-      return {
-        success: false,
-        error: rateLimitCheck.reason,
-      }
-    }
-
-    try {
-      const examContent = await groqProvider.generateExam(config, sourceText)
-
-      // Record successful request for rate limiting
-      rateLimiter.recordRequest()
-
-      // Record exam generation for user quota tracking
-      usageTrackingService.recordExamGeneration(userId)
-
-      // Get updated usage status
-      const updatedUsage = usageTrackingService.getUsageStatus(userId)
-
-      return {
-        success: true,
-        content: examContent,
-        usageStatus: updatedUsage,
-      }
-    } catch (error) {
-      console.error('[IPC] Groq exam generation failed:', error)
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to generate exam',
-      }
-    }
-  })
+  )
 
   console.log('[IPC] Handlers registered successfully')
 }

@@ -38,7 +38,7 @@ import { useFileUploadStore } from '../store/useFileUploadStore'
 export function ExamTypeSelectionPage() {
   const navigate = useNavigate()
   const { isQuestionTypesValid } = useExamConfigStore()
-  const uploadedFiles = useFileUploadStore((state) => state.uploadedFiles)
+  const uploadedFiles = useFileUploadStore(state => state.uploadedFiles)
 
   // Check if user can proceed
   const canProceed = isQuestionTypesValid()

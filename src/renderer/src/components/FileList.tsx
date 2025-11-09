@@ -131,14 +131,12 @@ function getStatusBadge(file: UploadedFile) {
  * Displays a single file with all its details and actions
  */
 function FileItem({ file }: { file: UploadedFile }) {
-  const removeFile = useFileUploadStore((state) => state.removeFile)
+  const removeFile = useFileUploadStore(state => state.removeFile)
 
   return (
     <div
       className={`flex items-center justify-between p-4 rounded-lg border transition-colors ${
-        file.status === 'invalid'
-          ? 'border-red-200 bg-red-50'
-          : 'border-gray-200 hover:bg-gray-50'
+        file.status === 'invalid' ? 'border-red-200 bg-red-50' : 'border-gray-200 hover:bg-gray-50'
       }`}
     >
       {/* File Info */}
@@ -199,8 +197,8 @@ function FileItem({ file }: { file: UploadedFile }) {
  * Container for all uploaded files
  */
 export function FileList() {
-  const uploadedFiles = useFileUploadStore((state) => state.uploadedFiles)
-  const clearAllFiles = useFileUploadStore((state) => state.clearAllFiles)
+  const uploadedFiles = useFileUploadStore(state => state.uploadedFiles)
+  const clearAllFiles = useFileUploadStore(state => state.clearAllFiles)
 
   // Don't render if no files
   if (uploadedFiles.length === 0) {
@@ -219,7 +217,7 @@ export function FileList() {
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
-        {uploadedFiles.map((file) => (
+        {uploadedFiles.map(file => (
           <FileItem key={file.id} file={file} />
         ))}
       </CardContent>

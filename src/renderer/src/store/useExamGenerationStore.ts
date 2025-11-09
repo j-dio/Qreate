@@ -163,7 +163,7 @@ export const useExamGenerationStore = create<ExamGenerationStore>((set, get) => 
     })
   },
 
-  updateProgress: (progressUpdate) => {
+  updateProgress: progressUpdate => {
     const currentProgress = get().progress
 
     // Calculate estimated time remaining
@@ -185,26 +185,26 @@ export const useExamGenerationStore = create<ExamGenerationStore>((set, get) => 
     })
   },
 
-  setStatus: (status) => {
+  setStatus: status => {
     set({ status })
   },
 
-  setError: (error) => {
+  setError: error => {
     set({
       status: 'error',
       error,
     })
   },
 
-  setGeneratedExam: (exam) => {
+  setGeneratedExam: exam => {
     set({
       generatedExam: exam,
       status: 'completed',
     })
   },
 
-  addRawResponse: (response) => {
-    set((state) => ({
+  addRawResponse: response => {
+    set(state => ({
       rawResponses: [...state.rawResponses, response],
     }))
   },

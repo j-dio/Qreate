@@ -112,10 +112,10 @@ export const useFileUploadStore = create<FileUploadState>((set, get) => ({
    * 4. Preserve file path if available (from Electron file dialog)
    * 5. Files will be validated in the component
    */
-  addFiles: (files) =>
-    set((state) => {
+  addFiles: files =>
+    set(state => {
       // Create UploadedFile objects with unique IDs
-      const newFiles: UploadedFile[] = files.map((file) => ({
+      const newFiles: UploadedFile[] = files.map(file => ({
         id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         file,
         name: file.name,
@@ -125,11 +125,14 @@ export const useFileUploadStore = create<FileUploadState>((set, get) => ({
         status: 'pending',
       }))
 
-      console.log('[FileUploadStore] Adding files:', newFiles.map(f => ({
-        name: f.name,
-        hasPath: !!f.path,
-        path: f.path
-      })))
+      console.log(
+        '[FileUploadStore] Adding files:',
+        newFiles.map(f => ({
+          name: f.name,
+          hasPath: !!f.path,
+          path: f.path,
+        }))
+      )
 
       // Calculate new total size
       const newTotalSize = state.totalSize + newFiles.reduce((sum, f) => sum + f.size, 0)
@@ -145,13 +148,13 @@ export const useFileUploadStore = create<FileUploadState>((set, get) => ({
    *
    * Also updates the total size by subtracting the removed file's size
    */
-  removeFile: (id) =>
-    set((state) => {
-      const fileToRemove = state.uploadedFiles.find((f) => f.id === id)
+  removeFile: id =>
+    set(state => {
+      const fileToRemove = state.uploadedFiles.find(f => f.id === id)
       if (!fileToRemove) return state
 
       return {
-        uploadedFiles: state.uploadedFiles.filter((f) => f.id !== id),
+        uploadedFiles: state.uploadedFiles.filter(f => f.id !== id),
         totalSize: state.totalSize - fileToRemove.size,
       }
     }),
@@ -164,8 +167,8 @@ export const useFileUploadStore = create<FileUploadState>((set, get) => ({
    * valid → extracting → ready
    */
   updateFileStatus: (id, status, error) =>
-    set((state) => ({
-      uploadedFiles: state.uploadedFiles.map((f) =>
+    set(state => ({
+      uploadedFiles: state.uploadedFiles.map(f =>
         f.id === id
           ? {
               ...f,
@@ -196,19 +199,19 @@ export const useFileUploadStore = create<FileUploadState>((set, get) => ({
    *
    * Shows visual feedback when user drags files over the drop zone
    */
-  setIsDragging: (isDragging) => set({ isDragging }),
+  setIsDragging: isDragging => set({ isDragging }),
 
   /**
    * Helper: Get a specific file by ID
    */
-  getFileById: (id) => get().uploadedFiles.find((f) => f.id === id),
+  getFileById: id => get().uploadedFiles.find(f => f.id === id),
 
   /**
    * Helper: Check if we can add more files
    *
    * Validates against MAX_FILES limit
    */
-  canAddFiles: (fileCount) => {
+  canAddFiles: fileCount => {
     const currentCount = get().uploadedFiles.length
     return currentCount + fileCount <= VALIDATION_RULES.MAX_FILES
   },

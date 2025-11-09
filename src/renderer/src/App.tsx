@@ -40,7 +40,7 @@ import { useAppStore } from './store/useAppStore'
  * Redirects to /login if user is not authenticated.
  */
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const user = useAppStore((state) => state.user)
+  const user = useAppStore(state => state.user)
 
   if (!user) {
     return <Navigate to="/login" replace />
@@ -56,7 +56,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
  * Redirects to home page if user is already authenticated.
  */
 function PublicRoute({ children }: { children: React.ReactNode }) {
-  const user = useAppStore((state) => state.user)
+  const user = useAppStore(state => state.user)
 
   if (user) {
     return <Navigate to="/" replace />

@@ -20,7 +20,7 @@ import { useAppStore } from '../store/useAppStore'
 
 export function LoginPage() {
   const navigate = useNavigate()
-  const setUser = useAppStore((state) => state.setUser)
+  const setUser = useAppStore(state => state.setUser)
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -57,7 +57,7 @@ export function LoginPage() {
     try {
       // TODO: Replace with actual authentication API call
       // For now, we'll simulate a login
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      await new Promise(resolve => setTimeout(resolve, 1000))
 
       // Mock successful login
       setUser({
@@ -112,7 +112,7 @@ export function LoginPage() {
                 type="email"
                 placeholder="you@example.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={e => setEmail(e.target.value)}
                 error={errors.email}
                 disabled={isLoading}
               />
@@ -123,7 +123,7 @@ export function LoginPage() {
                 type="password"
                 placeholder="Enter your password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={e => setPassword(e.target.value)}
                 error={errors.password}
                 disabled={isLoading}
               />

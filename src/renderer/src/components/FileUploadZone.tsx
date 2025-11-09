@@ -57,12 +57,12 @@ export function FileUploadZone() {
    */
   useEffect(() => {
     // Find all pending files
-    const pendingFiles = uploadedFiles.filter((f) => f.status === 'pending')
+    const pendingFiles = uploadedFiles.filter(f => f.status === 'pending')
 
     if (pendingFiles.length === 0) return
 
     // Simulate validation for each pending file
-    pendingFiles.forEach((file) => {
+    pendingFiles.forEach(file => {
       // Update to "validating" status first
       updateFileStatus(file.id, 'validating')
 
@@ -293,8 +293,7 @@ export function FileUploadZone() {
           <div className="text-xs text-muted-foreground text-center space-y-1">
             <p>Allowed types: {rules.allowedTypes}</p>
             <p>
-              Max {rules.maxFiles} files • {rules.maxFileSize} per file • {rules.maxTotalSize}{' '}
-              total
+              Max {rules.maxFiles} files • {rules.maxFileSize} per file • {rules.maxTotalSize} total
             </p>
           </div>
         </CardContent>

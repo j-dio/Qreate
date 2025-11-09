@@ -5,11 +5,12 @@
       "Read(//c/Users/John Dio Lumacang/Downloads/**)"
     ]
   },
+  "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "playwright",
     "filesystem",
     "sqlite",
     "sentry"
   ],
-  "enableAllProjectMcpServers": true
+  "$schema": "https://json.schemastore.org/claude-code-settings.json"
 }

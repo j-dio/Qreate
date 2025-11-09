@@ -131,39 +131,39 @@ export const useAppStore = create<AppState>()(
       selectedAIProvider: 'gemini', // Default to free provider
 
       // Actions
-      setUser: (user) => set({ user }),
+      setUser: user => set({ user }),
 
-      updateUser: (updates) =>
-        set((state) => ({
+      updateUser: updates =>
+        set(state => ({
           user: state.user ? { ...state.user, ...updates } : null,
         })),
 
-      addProject: (project) =>
-        set((state) => ({
+      addProject: project =>
+        set(state => ({
           projects: [project, ...state.projects], // Add to beginning
         })),
 
       updateProject: (id, updates) =>
-        set((state) => ({
-          projects: state.projects.map((p) => (p.id === id ? { ...p, ...updates } : p)),
+        set(state => ({
+          projects: state.projects.map(p => (p.id === id ? { ...p, ...updates } : p)),
         })),
 
-      deleteProject: (id) =>
-        set((state) => ({
-          projects: state.projects.filter((p) => p.id !== id),
+      deleteProject: id =>
+        set(state => ({
+          projects: state.projects.filter(p => p.id !== id),
         })),
 
-      updateSettings: (settings) =>
-        set((state) => ({
+      updateSettings: settings =>
+        set(state => ({
           settings: { ...state.settings, ...settings },
         })),
 
-      setApiCredentials: (credentials) =>
-        set((state) => ({
+      setApiCredentials: credentials =>
+        set(state => ({
           apiCredentials: { ...state.apiCredentials, ...credentials },
         })),
 
-      setAIProvider: (provider) =>
+      setAIProvider: provider =>
         set({
           selectedAIProvider: provider,
         }),

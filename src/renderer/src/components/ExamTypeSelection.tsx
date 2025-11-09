@@ -161,7 +161,7 @@ export function ExamTypeSelection() {
 
         {/* Question Type Inputs */}
         <div className="space-y-3">
-          {(Object.keys(QUESTION_TYPES) as QuestionType[]).map((type) => {
+          {(Object.keys(QUESTION_TYPES) as QuestionType[]).map(type => {
             const config = QUESTION_TYPES[type]
             return (
               <QuestionTypeInput
@@ -170,7 +170,7 @@ export function ExamTypeSelection() {
                 description={config.description}
                 icon={config.icon}
                 value={questionTypes[type]}
-                onChange={(value) => setQuestionTypeQuantity(type, value)}
+                onChange={value => setQuestionTypeQuantity(type, value)}
                 min={EXAM_CONFIG_RULES.MIN_ITEMS_PER_TYPE}
                 max={EXAM_CONFIG_RULES.MAX_ITEMS_PER_TYPE}
               />
@@ -201,7 +201,11 @@ export function ExamTypeSelection() {
             </div>
             <div
               className={`text-5xl font-bold ${
-                isValid ? 'text-green-600' : totalQuestions > 0 ? 'text-orange-600' : 'text-gray-400'
+                isValid
+                  ? 'text-green-600'
+                  : totalQuestions > 0
+                    ? 'text-orange-600'
+                    : 'text-gray-400'
               }`}
             >
               {totalQuestions}

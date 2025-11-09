@@ -213,9 +213,7 @@ export function ExamSuccessPage() {
                   <CheckCircle2 className="h-5 w-5" />
                   <span className="font-medium">PDF generated successfully!</span>
                 </div>
-                <p className="text-xs text-muted-foreground break-all">
-                  Saved to: {pdfPath}
-                </p>
+                <p className="text-xs text-muted-foreground break-all">Saved to: {pdfPath}</p>
                 <div className="flex gap-3">
                   <Button onClick={handleOpenFolder} variant="outline" className="flex-1">
                     <FolderOpen className="h-4 w-4 mr-2" />
