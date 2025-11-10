@@ -27,8 +27,6 @@ import { Button } from '../components/ui/Button'
 import { useExamGenerationStore } from '../store/useExamGenerationStore'
 import { useFileUploadStore } from '../store/useFileUploadStore'
 import { useExamConfigStore } from '../store/useExamConfigStore'
-import { useAppStore } from '../store/useAppStore'
-import { ExamGenerationService } from '../services/ExamGenerationService'
 
 export function ExamGenerationProgressPage() {
   const navigate = useNavigate()
@@ -50,8 +48,6 @@ export function ExamGenerationProgressPage() {
   const questionTypes = useExamConfigStore(state => state.questionTypes)
   const difficultyDistribution = useExamConfigStore(state => state.difficultyDistribution)
   const totalQuestions = useExamConfigStore(state => state.getTotalQuestions())
-  const selectedAIProvider = useAppStore(state => state.selectedAIProvider)
-  const apiCredentials = useAppStore(state => state.apiCredentials)
 
   // Validate user came from proper workflow
   useEffect(() => {
@@ -59,17 +55,8 @@ export function ExamGenerationProgressPage() {
       navigate('/create-exam')
       return
     }
-
-    // Check AI provider is connected
-    const isConnected =
-      (selectedAIProvider === 'gemini' && apiCredentials.geminiApiKey) ||
-      (selectedAIProvider === 'openai' && apiCredentials.openaiApiKey)
-
-    if (!isConnected) {
-      navigate('/settings')
-      return
-    }
-  }, [uploadedFiles, totalQuestions, selectedAIProvider, apiCredentials, navigate])
+    // No need to check API keys with Groq backend - it's managed server-side
+  }, [uploadedFiles, totalQuestions, navigate])
 
   // Start generation automatically on mount
   useEffect(() => {
@@ -80,65 +67,89 @@ export function ExamGenerationProgressPage() {
   }, [hasStarted, status])
 
   const handleStartGeneration = async () => {
-    // Get API key for selected provider
-    const apiKey =
-      selectedAIProvider === 'gemini'
-        ? apiCredentials.geminiApiKey
-        : selectedAIProvider === 'openai'
-          ? apiCredentials.openaiApiKey
-          : ''
+    try {
+      // Start generation
+      startGeneration()
 
-    if (!apiKey) {
-      setError({
-        message: 'API key not found for selected provider',
-        code: 'NO_API_KEY',
-        canRetry: false,
-        retryCount: 0,
-        maxRetries: 3,
+      // Update initial progress
+      updateProgress({
+        totalFiles: uploadedFiles.length,
+        totalQuestionsNeeded: totalQuestions,
+        currentFileIndex: 0,
+        questionsGenerated: 0,
       })
-      return
-    }
 
-    // Start generation
-    startGeneration()
-
-    // Update initial progress
-    updateProgress({
-      totalFiles: uploadedFiles.length,
-      totalQuestionsNeeded: totalQuestions,
-      currentFileIndex: 0,
-      questionsGenerated: 0,
-    })
-
-    // Create service
-    const service = new ExamGenerationService({
-      files: uploadedFiles,
-      questionTypes,
-      difficultyDistribution,
-      totalQuestions,
-      aiProvider: selectedAIProvider,
-      apiKey,
-    })
-
-    // Generate exam with progress callback
-    const result = await service.generate(progressUpdate => {
-      updateProgress(progressUpdate)
-    })
-
-    // Handle result
-    if (result.success && result.exam) {
-      setGeneratedExam(result.exam)
-      // Navigate to success page with exam data
-      setTimeout(() => {
-        navigate('/create-exam/success', {
-          state: { exam: result.exam },
+      // Extract text from all files first
+      const fileTexts: string[] = []
+      for (let i = 0; i < uploadedFiles.length; i++) {
+        const file = uploadedFiles[i]
+        
+        // Update progress for file processing
+        updateProgress({
+          totalFiles: uploadedFiles.length,
+          totalQuestionsNeeded: totalQuestions,
+          currentFileIndex: i,
+          questionsGenerated: 0,
+          currentFile: file.name,
+          stage: 'processing_files',
         })
-      }, 2000)
-    } else if (result.error) {
+
+        // Extract text from file
+        const result = await window.electron.extractFileText(file.path!)
+        if (result.success && result.text) {
+          fileTexts.push(result.text)
+        } else {
+          throw new Error(`Failed to extract text from ${file.name}: ${result.error}`)
+        }
+      }
+
+      // Combine all file texts
+      const combinedText = fileTexts.join('\n\n')
+
+      // Update progress for AI generation
+      updateProgress({
+        totalFiles: uploadedFiles.length,
+        totalQuestionsNeeded: totalQuestions,
+        currentFileIndex: uploadedFiles.length,
+        questionsGenerated: 0,
+        stage: 'generating_exam',
+      })
+
+      // Generate exam with Groq backend
+      const config = {
+        questionTypes,
+        difficultyDistribution,
+        totalQuestions,
+      }
+
+      const examResult = await window.electron.groq.generateExam(config, combinedText)
+
+      if (examResult.success && examResult.content) {
+        // The IPC handler returns the exam content as 'content', not 'exam'
+        setGeneratedExam(examResult.content)
+        
+        // Update final progress
+        updateProgress({
+          totalFiles: uploadedFiles.length,
+          totalQuestionsNeeded: totalQuestions,
+          currentFileIndex: uploadedFiles.length,
+          questionsGenerated: totalQuestions,
+          stage: 'completed',
+        })
+
+        // Navigate to success page with exam data
+        setTimeout(() => {
+          navigate('/create-exam/success', {
+            state: { exam: examResult.content },
+          })
+        }, 2000)
+      } else {
+        throw new Error(examResult.error || 'Failed to generate exam')
+      }
+    } catch (error: any) {
       setError({
-        message: result.error.message,
-        code: result.error.code,
-        file: result.error.file,
+        message: error.message || 'Unknown error occurred',
+        code: 'GENERATION_ERROR',
         canRetry: true,
         retryCount: 0,
         maxRetries: 3,

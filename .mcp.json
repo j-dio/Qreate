@@ -13,7 +13,7 @@
         "/c",
         "npx",
         "@modelcontextprotocol/server-filesystem",
-        "C:\\Users\\John Dio Lumacang\\Desktop\\Programming\\Qreate"
+        "C:\\Users\\NITRO V15\\Documents\\Development\\Projects\\Active\\qreate"
       ],
       "env": {}
     },
@@ -23,21 +23,16 @@
       "args": [
         "/c",
         "npx",
-        "@modelcontextprotocol/server-sqlite",
-        "C:\\Users\\John Dio Lumacang\\Desktop\\Programming\\Qreate\\qreate.db"
+        "@berthojoris/mcp-sqlite-server",
+        "--database-path",
+        "C:\\Users\\NITRO V15\\Documents\\Development\\Projects\\Active\\qreate\\database.sqlite"
       ],
       "env": {}
     },
     "sentry": {
       "type": "stdio",
       "command": "cmd",
-      "args": [
-        "/c",
-        "npx",
-        "-y",
-        "mcp-remote@latest",
-        "https://mcp.sentry.dev/mcp"
-      ],
+      "args": ["/c", "npx", "-y", "mcp-remote@latest", "https://mcp.sentry.dev/mcp"],
       "env": {}
     }
   }

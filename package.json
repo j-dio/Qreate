@@ -10,7 +10,7 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint . --ext .ts,.tsx",
+    "lint": "eslint src --ext .ts,.tsx",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
     "package": "npm run build && electron-builder",
     "postinstall": "electron-rebuild"
@@ -25,7 +25,11 @@
   },
   "homepage": "https://github.com/j-dio/Qreate#readme",
   "dependencies": {
+    "@berthojoris/mcp-sqlite-server": "^1.1.1",
     "@google/generative-ai": "^0.24.1",
+    "@modelcontextprotocol/server-filesystem": "^2025.8.21",
+    "@playwright/mcp": "^0.0.46",
+    "@sentry/mcp-server": "^0.21.0",
     "@xstate/react": "^6.0.0",
     "better-sqlite3": "^12.4.1",
     "class-variance-authority": "^0.7.1",

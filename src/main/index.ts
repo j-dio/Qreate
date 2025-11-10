@@ -25,6 +25,8 @@ import { GroqProvider } from './services/GroqProvider'
 import { RateLimiter } from './services/RateLimiter'
 import { DatabaseService } from './services/DatabaseService'
 import { UsageTrackingService } from './services/UsageTrackingService'
+import { ExamQualityValidator } from './services/ExamQualityValidator'
+import { ExamParser } from '../shared/services/ExamParser'
 
 // Global reference to prevent garbage collection
 let mainWindow: BrowserWindow | null = null
@@ -475,6 +477,41 @@ function registerIpcHandlers(): void {
       try {
         const examContent = await groqProvider.generateExam(config, sourceText)
 
+        // Parse the exam content into structured format
+        console.log('[IPC] Parsing generated exam content...')
+        const examParser = new ExamParser()
+        const questions = examParser.parseExam(examContent)
+
+        // Create exam object for validation
+        const exam = {
+          id: `exam-${Date.now()}-${userId}`,
+          topic: 'Generated Exam', // TODO: Extract from content
+          questions,
+          createdAt: new Date(),
+          totalQuestions: questions.length,
+          metadata: {
+            sourceFiles: [], // Will be populated by renderer
+            aiProvider: 'groq',
+            generationTime: 0,
+          },
+        }
+
+        // Perform quality validation
+        console.log('[IPC] Performing quality validation...')
+        const qualityValidator = new ExamQualityValidator(sourceText, {
+          minimumQualityScore: 0.7, // 70% quality threshold
+          retryOnLowQuality: false, // Don't auto-retry in main process
+        })
+
+        const validationResult = await qualityValidator.validateExam(exam)
+
+        console.log('[IPC] Quality validation complete:', {
+          valid: validationResult.isValid,
+          score: validationResult.overallQualityScore.toFixed(3),
+          duplicates: validationResult.duplicatesFound,
+          sourceIssues: validationResult.sourceIssues,
+        })
+
         // Record successful request for rate limiting
         rateLimiter.recordRequest()
 
@@ -487,6 +524,16 @@ function registerIpcHandlers(): void {
         return {
           success: true,
           content: examContent,
+          exam: exam, // Include structured exam data
+          qualityMetrics: {
+            score: validationResult.overallQualityScore,
+            isValid: validationResult.isValid,
+            metrics: validationResult.metrics,
+            duplicatesFound: validationResult.duplicatesFound,
+            sourceIssues: validationResult.sourceIssues,
+            difficultyIssues: validationResult.difficultyIssues,
+            recommendations: validationResult.recommendations,
+          },
           usageStatus: updatedUsage,
         }
       } catch (error) {

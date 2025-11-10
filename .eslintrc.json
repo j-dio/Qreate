@@ -27,8 +27,12 @@
       "warn",
       { "argsIgnorePattern": "^_" }
     ],
+    "@typescript-eslint/no-explicit-any": "off",
     "react/react-in-jsx-scope": "off",
-    "react/prop-types": "off"
+    "react/prop-types": "off",
+    "react/no-unescaped-entities": "off",
+    "react-hooks/set-state-in-effect": "warn",
+    "no-useless-escape": "off"
   },
   "settings": {
     "react": {

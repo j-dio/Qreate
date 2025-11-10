@@ -30,13 +30,14 @@ import {
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
-import type { GeneratedExam } from '../store/useExamGenerationStore'
+import { useFileUploadStore } from '../store/useFileUploadStore'
+import { useExamConfigStore } from '../store/useExamConfigStore'
 
 /**
  * State passed from ExamGenerationProgressPage
  */
 interface LocationState {
-  exam: GeneratedExam
+  exam: string // Raw exam content from Groq
 }
 
 /**
@@ -48,6 +49,11 @@ export function ExamSuccessPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const state = location.state as LocationState | null
+  
+  // Get data from stores to display exam info
+  const uploadedFiles = useFileUploadStore(state => state.uploadedFiles)
+  const totalQuestions = useExamConfigStore(state => state.getTotalQuestions())
+  const questionTypes = useExamConfigStore(state => state.questionTypes)
 
   // Local state
   const [pdfStatus, setPDFStatus] = useState<PDFStatus>('idle')
@@ -72,21 +78,30 @@ export function ExamSuccessPage() {
     setError(null)
 
     try {
-      // DEBUG: Log exam structure
-      console.log('[ExamSuccessPage] Exam object:', state.exam)
-      console.log('[ExamSuccessPage] First question:', state.exam.questions[0])
-      console.log('[ExamSuccessPage] First question options:', state.exam.questions[0]?.options)
+      // state.exam is raw exam content from Groq (string format)
+      console.log('[ExamSuccessPage] Exam content length:', state.exam.length)
 
-      // Create filename from topic
-      const sanitizedTopic = state.exam.topic.replace(/[^a-zA-Z0-9]/g, '_')
-      const timestamp = Date.now()
-      const filename = `${sanitizedTopic}_${timestamp}.pdf`
+      // Create filename with timestamp
+      const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-')
+      const filename = `Exam_${timestamp}.pdf`
       const outputPath = `Projects/${filename}`
 
       console.log('[ExamSuccessPage] Generating PDF:', outputPath)
 
+      // Parse the exam content for PDF generation
+      // The PDF generator expects the raw exam content from Groq
+      const examData = {
+        content: state.exam, // Raw exam content string
+        totalQuestions,
+        metadata: {
+          generatedAt: new Date().toISOString(),
+          sourceFiles: uploadedFiles.map(f => f.name),
+          aiProvider: 'Groq AI (Backend)'
+        }
+      }
+
       // Generate PDF
-      const result = await window.electron.generateExamPDF(state.exam, outputPath)
+      const result = await window.electron.generateExamPDF(examData, outputPath)
 
       if (!result.success) {
         throw new Error(result.error || 'Failed to generate PDF')
@@ -137,8 +152,7 @@ export function ExamSuccessPage() {
             <div>
               <h1 className="text-2xl font-bold text-green-900">Exam Generated Successfully!</h1>
               <p className="text-green-700 mt-1">
-                {state.exam.totalQuestions} questions created from{' '}
-                {state.exam.metadata.sourceFiles.length} file(s)
+                {totalQuestions} questions created from {uploadedFiles.length} file(s)
               </p>
             </div>
           </CardContent>
@@ -155,24 +169,33 @@ export function ExamSuccessPage() {
           <CardContent className="space-y-2">
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
-                <span className="text-muted-foreground">Topic:</span>
-                <span className="ml-2 font-medium">{state.exam.topic}</span>
+                <span className="text-muted-foreground">Total Questions:</span>
+                <span className="ml-2 font-medium">{totalQuestions}</span>
               </div>
               <div>
-                <span className="text-muted-foreground">Questions:</span>
-                <span className="ml-2 font-medium">{state.exam.totalQuestions}</span>
-              </div>
-              <div className="col-span-2">
                 <span className="text-muted-foreground">Source Files:</span>
                 <span className="ml-2 font-medium">
-                  {state.exam.metadata.sourceFiles.join(', ')}
+                  {uploadedFiles.map(f => f.name).join(', ')}
                 </span>
               </div>
               <div>
                 <span className="text-muted-foreground">AI Provider:</span>
-                <span className="ml-2 font-medium capitalize">
-                  {state.exam.metadata.aiProvider}
-                </span>
+                <span className="ml-2 font-medium">Groq AI (Backend)</span>
+              </div>
+            </div>
+            
+            {/* Question type breakdown */}
+            <div className="mt-4">
+              <p className="text-sm text-muted-foreground mb-2">Question Types:</p>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                {Object.entries(questionTypes)
+                  .filter(([_, count]) => count > 0)
+                  .map(([type, count]) => (
+                    <div key={type} className="flex justify-between">
+                      <span className="capitalize">{type.replace(/([A-Z])/g, ' $1').trim()}:</span>
+                      <span className="font-medium">{count}</span>
+                    </div>
+                  ))}
               </div>
             </div>
           </CardContent>

@@ -1,8 +1,10 @@
 {
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "permissions": {
     "allow": [
-      "Read(//c/Users/John Dio Lumacang/Pictures/Screenshots/**)",
-      "Read(//c/Users/John Dio Lumacang/Downloads/**)"
+      "Read(//c/Users/NITRO V15/Pictures/Screenshots/**)",
+      "Read(//c/Users/NITRO V15/Downloads/**)",
+      "Read(//c/Users/NITRO V15/Documents/Development/Projects/Active/qreate/**)"
     ]
   },
   "enableAllProjectMcpServers": true,
@@ -11,6 +13,5 @@
     "filesystem",
     "sqlite",
     "sentry"
-  ],
-  "$schema": "https://json.schemastore.org/claude-code-settings.json"
+  ]
 }

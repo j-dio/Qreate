@@ -268,21 +268,36 @@ export class GroqProvider {
         ? sourceText.substring(0, maxSourceLength) + '\n\n[... content truncated ...]'
         : sourceText
 
-    // Build the prompt (same format as Gemini/OpenAI for consistency)
-    return `You are an expert exam creator. Your task is to generate an educational exam based on the provided study material.
+    // Enhanced prompt with comprehensive quality improvements
+    return `You are an expert educational assessment creator. Your task is to generate a high-quality, comprehensive exam that accurately evaluates student understanding of the provided study material.
 
-**CRITICAL INSTRUCTIONS:**
-1. Generate ONLY the exam content - no introductions, explanations, or suggestions
-2. Follow the format below EXACTLY - character for character
-3. Use ONLY information from the provided study material
-4. ALL questions must be complete sentences with proper formatting
-5. For Multiple Choice: ALWAYS include exactly 4 options (A, B, C, D) on separate lines
-6. For True/False: Label as "True/False" section, each question is a complete statement
-7. Ensure questions are clear, unambiguous, and academically rigorous
+**CRITICAL QUALITY REQUIREMENTS:**
 
-**EXACT OUTPUT FORMAT (follow this template precisely):**
+1. **UNIQUENESS & NO REPETITION:** Each question must test a DIFFERENT concept, fact, or skill. No two questions should test the same information in different ways. Spread questions across ALL major topics in the material.
 
-General Topic: [Extract the main topic from the study material]
+2. **SOURCE FIDELITY:** Base questions STRICTLY on information explicitly stated in the study material. Do NOT infer, assume, or add external knowledge. If the material doesn't contain enough information for a question type, skip that question rather than guess.
+
+3. **DIFFICULTY ACCURACY:** Match each question precisely to its assigned difficulty level:
+   - **Very Easy:** Direct recall of explicitly stated facts, definitions, basic terminology
+   - **Easy:** Simple concept recognition, basic relationships between ideas
+   - **Moderate:** Understanding connections between concepts, applying knowledge to similar situations
+   - **Hard:** Analysis of complex relationships, synthesis of multiple concepts, problem-solving
+   - **Very Hard:** Critical evaluation, creation of new solutions, advanced reasoning and application
+
+4. **COMPREHENSIVE COVERAGE:** Distribute questions evenly across all major topics/sections in the study material. Avoid clustering questions on only one topic.
+
+5. **ACADEMIC RIGOR:** All questions must be clear, unambiguous, and educationally sound. Ensure correct answers are definitively supported by the source material.
+
+**STRICT FORMATTING REQUIREMENTS:**
+- Generate ONLY the exam content - no introductions, explanations, or suggestions
+- Follow the format below EXACTLY - character for character
+- Number questions sequentially (1, 2, 3, etc.) across ALL types
+- Group questions by type as specified
+- For Multiple Choice: ALWAYS exactly 4 options (A, B, C, D), each on separate line, indented with 3 spaces
+
+**EXACT OUTPUT FORMAT:**
+
+General Topic: [Extract the main subject/topic from the study material]
 
 ----Exam Content----
 
@@ -290,59 +305,58 @@ Multiple Choice:
 
 1. [Question text here?]
    A. [First option]
-   B. [Second option]
-   C. [Third option]
-   D. [Fourth option]
-
-2. [Next question text here?]
-   A. [First option]
-   B. [Second option]
+   B. [Second option] 
    C. [Third option]
    D. [Fourth option]
 
 True/False:
 
-3. [Statement that can be true or false.]
-
-4. [Another statement that can be true or false.]
+X. [Complete statement that can be definitively true or false based on source material.]
 
 Fill in the Blanks:
 
-5. [Question text with _____ representing the blank.]
+Y. [Question text with _____ representing the blank to be filled.]
 
-[Continue for all question types...]
+[Continue for all requested question types...]
 
 [PAGE BREAK]
 
 ----Answer Key----
 
 1. A
-2. C
-3. True
-4. False
-5. [correct word or phrase]
+X. True
+Y. [correct word or phrase]
 [Continue for all questions...]
 
-**FORMATTING RULES:**
-- Number questions sequentially (1, 2, 3, etc.) across ALL types
-- Group questions by type (Multiple Choice first, then True/False, etc.)
-- Each multiple choice question MUST have exactly 4 options labeled A, B, C, D
-- Each option on its own line, indented with 3 spaces
-- One blank line between questions
-- Answer key: Just the number and answer (e.g., "1. A", not "1. A. First option")
+**GENERATION REQUIREMENTS:**
 
-**QUESTION TYPES & QUANTITIES:**
+Question Types & Quantities:
 ${questionTypesText}
 
 Total Questions: ${config.totalQuestions}
 
-**DIFFICULTY DISTRIBUTION:**
+Difficulty Distribution:
 ${difficultyText}
+
+**CONTENT ANALYSIS REQUIREMENTS:**
+Before generating questions, mentally identify:
+1. Major topics/concepts in the material (aim for ${Math.ceil(config.totalQuestions / 3)}-${Math.ceil(config.totalQuestions / 2)} distinct topics)
+2. Key facts, definitions, and relationships
+3. Appropriate difficulty levels for different concepts
+4. Ensure balanced coverage - no topic should have more than ${Math.ceil(config.totalQuestions / 3)} questions
 
 **STUDY MATERIAL:**
 ${truncatedSource}
 
+**QUALITY CHECKLIST - Verify before submitting:**
+- ✓ Each question tests a unique concept/fact
+- ✓ All questions strictly based on provided material
+- ✓ Difficulty levels accurately assigned
+- ✓ Questions distributed across all major topics
+- ✓ Correct answers are clearly supported by source text
+- ✓ Format followed exactly
+
 **OUTPUT:**
-Generate the exam now following the EXACT format above. No introductory text, no explanations, ONLY the formatted exam.`
+Generate the exam now following ALL requirements above. Prioritize quality over speed - ensure each question is unique, accurate, and properly difficulty-matched.`
   }
 }

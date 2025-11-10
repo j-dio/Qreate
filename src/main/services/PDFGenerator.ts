@@ -63,19 +63,28 @@ export class PDFGenerator {
   /**
    * Generate PDF from exam data
    *
-   * @param exam - Generated exam object
+   * @param examData - Generated exam object OR raw exam content from Groq
    * @param outputPath - Absolute path to save PDF
    * @returns Promise<void>
    */
-  async generateExamPDF(exam: GeneratedExam, outputPath: string): Promise<void> {
+  async generateExamPDF(examData: GeneratedExam | any, outputPath: string): Promise<void> {
     // Ensure output directory exists
     const dir = path.dirname(outputPath)
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true })
     }
 
-    // Create HTML content
-    const html = this.formatExamAsHTML(exam)
+    // Check if this is raw Groq content or structured exam object
+    let html: string
+    if (typeof examData.content === 'string') {
+      // New Groq format: raw exam content
+      html = this.formatGroqExamAsHTML(examData)
+    } else if (examData.questions && Array.isArray(examData.questions)) {
+      // Old structured format
+      html = this.formatExamAsHTML(examData)
+    } else {
+      throw new Error('Invalid exam data format')
+    }
 
     // Create hidden browser window
     const win = new BrowserWindow({
@@ -113,7 +122,96 @@ export class PDFGenerator {
   }
 
   /**
-   * Format exam as HTML with professional styling
+   * Format raw Groq exam content as HTML with professional styling
+   *
+   * @param examData - Raw exam data from Groq
+   * @returns HTML string
+   */
+  private formatGroqExamAsHTML(examData: any): string {
+    const { content, totalQuestions, metadata } = examData
+    
+    // Extract topic from content (first line after "General Topic:")
+    let topic = 'Generated Exam'
+    const topicMatch = content.match(/General Topic:\s*(.+?)(?:\n|----)/i)
+    if (topicMatch) {
+      topic = topicMatch[1].trim()
+    }
+
+    // Build HTML
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>${topic}</title>
+  <style>
+    body {
+      font-family: 'Georgia', serif;
+      line-height: 1.6;
+      margin: 0;
+      padding: 20px;
+      color: #333;
+      background: white;
+    }
+    .header {
+      text-align: center;
+      border-bottom: 2px solid #333;
+      padding-bottom: 20px;
+      margin-bottom: 30px;
+    }
+    .title {
+      font-size: 24px;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+    .subtitle {
+      font-size: 14px;
+      color: #666;
+    }
+    .content {
+      white-space: pre-line;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .page-break {
+      page-break-before: always;
+    }
+    .footer {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      right: 20px;
+      text-align: center;
+      font-size: 10px;
+      color: #666;
+      border-top: 1px solid #ccc;
+      padding-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="title">${topic}</div>
+    <div class="subtitle">
+      ${totalQuestions} Questions | Generated with Qreate | ${new Date().toLocaleDateString()}
+    </div>
+  </div>
+  
+  <div class="content">
+${content}
+  </div>
+
+  <div class="footer">
+    Generated with Qreate - AI-Powered Exam Creator | ${metadata?.aiProvider || 'Groq AI'}
+  </div>
+</body>
+</html>`
+
+    return html
+  }
+
+  /**
+   * Format exam as HTML with professional styling (legacy format)
    *
    * @param exam - Generated exam object
    * @returns HTML string

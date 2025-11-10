@@ -74,6 +74,7 @@ interface GenerationProgress {
   totalQuestionsNeeded: number
   startTime: number | null
   estimatedTimeRemaining: number | null // milliseconds
+  stage?: string // Optional stage tracking for progress UI
 }
 
 /**

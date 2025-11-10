@@ -28,9 +28,9 @@
 import type { UploadedFile } from '../store/useFileUploadStore'
 import type { QuestionType, DifficultyLevel } from '../store/useExamConfigStore'
 import type { AIProviderType } from '../types/ai-providers'
-import type { GeneratedQuestion, GeneratedExam } from '../store/useExamGenerationStore'
+import type { GeneratedQuestion, GeneratedExam } from '../../../shared/types/exam'
 import { AIProviderFactory } from './ai-providers/provider-factory'
-import { ExamParser } from './ExamParser'
+import { ExamParser } from '../../../shared/services/ExamParser'
 
 /**
  * Exam Configuration for Generation
@@ -56,11 +56,34 @@ export type ProgressCallback = (progress: {
 }) => void
 
 /**
+ * Quality Metrics from Backend Validation
+ */
+export interface QualityMetrics {
+  score: number // 0.0-1.0
+  isValid: boolean
+  metrics: {
+    uniquenessScore: number
+    accuracyScore: number
+    difficultyScore: number
+    coverageScore: number
+  }
+  duplicatesFound: number
+  sourceIssues: number
+  difficultyIssues: number
+  recommendations: {
+    shouldRegenerate: boolean
+    improvements: string[]
+    retryWithPromptChanges?: string[]
+  }
+}
+
+/**
  * Exam Generation Result
  */
 export interface ExamGenerationResult {
   success: boolean
   exam?: GeneratedExam
+  qualityMetrics?: QualityMetrics
   error?: {
     message: string
     code?: string
@@ -110,6 +133,7 @@ export class ExamGenerationService {
 
       // Process files sequentially
       const allQuestions: GeneratedQuestion[] = []
+      const qualityMetricsArray: QualityMetrics[] = []
       const totalFiles = this.config.files.length
 
       for (let i = 0; i < totalFiles; i++) {
@@ -139,7 +163,7 @@ export class ExamGenerationService {
         }
 
         // Generate questions from this file
-        const { questions, rawResponse } = await this.generateQuestionsFromFile(
+        const { questions, rawResponse, qualityMetrics } = await this.generateQuestionsFromFile(
           provider,
           fileContent,
           file.name,
@@ -147,6 +171,11 @@ export class ExamGenerationService {
         )
 
         allQuestions.push(...questions)
+
+        // Collect quality metrics
+        if (qualityMetrics) {
+          qualityMetricsArray.push(qualityMetrics)
+        }
 
         // Log raw response for debugging
         console.log('[ExamGenerationService] ========== RAW AI RESPONSE ==========')
@@ -175,9 +204,13 @@ export class ExamGenerationService {
       // Validate and create exam
       const exam = this.createExam(allQuestions)
 
+      // Aggregate quality metrics from all files
+      const aggregatedQualityMetrics = this.aggregateQualityMetrics(qualityMetricsArray)
+
       return {
         success: true,
         exam,
+        qualityMetrics: aggregatedQualityMetrics,
       }
     } catch (error) {
       return {
@@ -270,7 +303,7 @@ export class ExamGenerationService {
     fileName: string,
     questionsToGenerate: number,
     retryCount = 0
-  ): Promise<{ questions: GeneratedQuestion[]; rawResponse: string }> {
+  ): Promise<{ questions: GeneratedQuestion[]; rawResponse: string; qualityMetrics?: QualityMetrics }> {
     try {
       // Build exam config for this file
       const examConfig = this.buildExamConfig(questionsToGenerate)
@@ -285,15 +318,39 @@ export class ExamGenerationService {
 
       const response = groqResult.content
 
-      // Parse response
-      const questions = this.parseAIResponse(response)
+      // Use structured exam data from backend if available
+      let questions: GeneratedQuestion[]
+      
+      if (groqResult.exam && groqResult.exam.questions) {
+        // Use pre-parsed and validated questions from backend
+        questions = groqResult.exam.questions
+        console.log('[ExamGenerationService] Using structured exam data from backend')
+      } else {
+        // Fallback: Parse response manually (legacy compatibility)
+        questions = this.parseAIResponse(response)
+        console.log('[ExamGenerationService] Using fallback parsing')
+      }
 
       // Validate questions
       if (questions.length === 0) {
         throw new Error('No questions generated from response')
       }
 
-      return { questions, rawResponse: response }
+      // Log quality metrics if available
+      if (groqResult.qualityMetrics) {
+        console.log('[ExamGenerationService] Quality metrics:', {
+          score: groqResult.qualityMetrics.score.toFixed(3),
+          duplicates: groqResult.qualityMetrics.duplicatesFound,
+          sourceIssues: groqResult.qualityMetrics.sourceIssues,
+          valid: groqResult.qualityMetrics.isValid,
+        })
+      }
+
+      return { 
+        questions, 
+        rawResponse: response,
+        qualityMetrics: groqResult.qualityMetrics 
+      }
     } catch (error) {
       // Retry logic (only for non-quota errors)
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
@@ -428,6 +485,92 @@ export class ExamGenerationService {
         generationTime: 0, // TODO: Track actual generation time
       },
     }
+  }
+
+  /**
+   * Aggregate quality metrics from multiple files/generations
+   */
+  private aggregateQualityMetrics(metricsArray: QualityMetrics[]): QualityMetrics | undefined {
+    if (metricsArray.length === 0) {
+      return undefined
+    }
+
+    // If only one set of metrics, return it directly
+    if (metricsArray.length === 1) {
+      return metricsArray[0]
+    }
+
+    // Aggregate metrics from multiple generations
+    const totalMetrics = metricsArray.length
+    const aggregated = {
+      score: 0,
+      isValid: true,
+      metrics: {
+        uniquenessScore: 0,
+        accuracyScore: 0,
+        difficultyScore: 0,
+        coverageScore: 0,
+      },
+      duplicatesFound: 0,
+      sourceIssues: 0,
+      difficultyIssues: 0,
+      recommendations: {
+        shouldRegenerate: false,
+        improvements: [] as string[],
+        retryWithPromptChanges: [] as string[],
+      },
+    }
+
+    // Average the scores
+    for (const metrics of metricsArray) {
+      aggregated.score += metrics.score
+      aggregated.metrics.uniquenessScore += metrics.metrics.uniquenessScore
+      aggregated.metrics.accuracyScore += metrics.metrics.accuracyScore
+      aggregated.metrics.difficultyScore += metrics.metrics.difficultyScore
+      aggregated.metrics.coverageScore += metrics.metrics.coverageScore
+      
+      // Sum the issue counts
+      aggregated.duplicatesFound += metrics.duplicatesFound
+      aggregated.sourceIssues += metrics.sourceIssues
+      aggregated.difficultyIssues += metrics.difficultyIssues
+      
+      // Combine validity (all must be valid for overall validity)
+      aggregated.isValid = aggregated.isValid && metrics.isValid
+      
+      // Collect unique improvements and recommendations
+      metrics.recommendations.improvements.forEach(improvement => {
+        if (!aggregated.recommendations.improvements.includes(improvement)) {
+          aggregated.recommendations.improvements.push(improvement)
+        }
+      })
+      
+      if (metrics.recommendations.retryWithPromptChanges) {
+        metrics.recommendations.retryWithPromptChanges.forEach(change => {
+          if (!aggregated.recommendations.retryWithPromptChanges!.includes(change)) {
+            aggregated.recommendations.retryWithPromptChanges!.push(change)
+          }
+        })
+      }
+      
+      // Should regenerate if any file suggests regeneration
+      aggregated.recommendations.shouldRegenerate = aggregated.recommendations.shouldRegenerate || metrics.recommendations.shouldRegenerate
+    }
+
+    // Average the scores
+    aggregated.score /= totalMetrics
+    aggregated.metrics.uniquenessScore /= totalMetrics
+    aggregated.metrics.accuracyScore /= totalMetrics
+    aggregated.metrics.difficultyScore /= totalMetrics
+    aggregated.metrics.coverageScore /= totalMetrics
+
+    console.log('[ExamGenerationService] Aggregated quality metrics:', {
+      score: aggregated.score.toFixed(3),
+      valid: aggregated.isValid,
+      totalDuplicates: aggregated.duplicatesFound,
+      totalSourceIssues: aggregated.sourceIssues,
+    })
+
+    return aggregated
   }
 
   /**
