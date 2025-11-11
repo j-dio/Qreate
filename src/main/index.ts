@@ -27,6 +27,7 @@ import { DatabaseService } from './services/DatabaseService'
 import { UsageTrackingService } from './services/UsageTrackingService'
 import { ExamQualityValidator } from './services/ExamQualityValidator'
 import { ExamParser } from '../shared/services/ExamParser'
+import { AuthService } from './services/AuthService'
 
 // Global reference to prevent garbage collection
 let mainWindow: BrowserWindow | null = null
@@ -123,13 +124,9 @@ function registerIpcHandlers(): void {
   // Initialize database and usage tracking
   const databaseService = new DatabaseService()
   const usageTrackingService = new UsageTrackingService(databaseService)
+  const authService = new AuthService(databaseService)
 
-  // Create test user if doesn't exist (temporary until auth is implemented)
-  const testUser = databaseService.getUserByEmail('test@qreate.app')
-  if (!testUser) {
-    databaseService.createUser('test@qreate.app', 'test_hash')
-    console.log('[Database] Test user created')
-  }
+  // Authentication system is now complete - real users will register through the UI
 
   // Initialize Groq provider (backend-managed)
   let groqProvider: GroqProvider | null = null
@@ -397,13 +394,20 @@ function registerIpcHandlers(): void {
   /**
    * Groq: Get usage status
    *
-   * Returns current usage stats for the user (quotas, remaining, reset times)
+   * Returns current usage stats for the authenticated user (quotas, remaining, reset times)
    *
-   * @param userId - User ID (optional, defaults to 1 for testing)
+   * @param userId - User ID (required)
    * @returns Usage status with quotas and stats
    */
-  ipcMain.handle('groq-get-usage-status', async (_, userId: number = 1) => {
+  ipcMain.handle('groq-get-usage-status', async (_, userId: number) => {
     console.log('[IPC] Get usage status for user:', userId)
+
+    if (!userId) {
+      return {
+        success: false,
+        error: 'User ID is required. Please log in.',
+      }
+    }
 
     try {
       const status = usageTrackingService.getUsageStatus(userId)
@@ -434,17 +438,24 @@ function registerIpcHandlers(): void {
    *
    * @param config - Exam configuration (types, difficulty, etc.)
    * @param sourceText - Extracted text from uploaded files
-   * @param userId - User ID (optional, defaults to 1 for testing)
+   * @param userId - User ID (required)
    * @returns Generated exam content
    */
   ipcMain.handle(
     'groq-generate-exam',
-    async (_, config: any, sourceText: string, userId: number = 1) => {
+    async (_, config: any, sourceText: string, userId: number) => {
       console.log('[IPC] Generate exam with Groq:', {
         userId,
         totalQuestions: config.totalQuestions,
         sourceTextLength: sourceText.length,
       })
+
+      if (!userId) {
+        return {
+          success: false,
+          error: 'User ID is required. Please log in.',
+        }
+      }
 
       if (!groqProvider) {
         return {
@@ -545,6 +556,197 @@ function registerIpcHandlers(): void {
       }
     }
   )
+
+  /**
+   * Authentication: Register new user
+   *
+   * @param name - User's full name
+   * @param email - User's email address
+   * @param password - User's password (will be hashed)
+   * @returns Authentication response with user data and session token
+   */
+  ipcMain.handle('auth-register', async (_, name: string, email: string, password: string) => {
+    console.log('[IPC] User registration request for email:', email)
+    
+    try {
+      const result = await authService.register({ name, email, password })
+      
+      if (result.success) {
+        console.log('[IPC] User registered successfully:', result.user?.id)
+      } else {
+        console.log('[IPC] Registration failed:', result.error)
+      }
+      
+      return result
+    } catch (error) {
+      console.error('[IPC] Registration error:', error)
+      return {
+        success: false,
+        error: 'Registration failed. Please try again.',
+      }
+    }
+  })
+
+  /**
+   * Authentication: Login existing user
+   *
+   * @param email - User's email address
+   * @param password - User's password
+   * @returns Authentication response with user data and session token
+   */
+  ipcMain.handle('auth-login', async (_, email: string, password: string) => {
+    console.log('[IPC] User login request for email:', email)
+    
+    try {
+      const result = await authService.login({ email, password })
+      
+      if (result.success) {
+        console.log('[IPC] User logged in successfully:', result.user?.id)
+      } else {
+        console.log('[IPC] Login failed:', result.error)
+      }
+      
+      return result
+    } catch (error) {
+      console.error('[IPC] Login error:', error)
+      return {
+        success: false,
+        error: 'Login failed. Please try again.',
+      }
+    }
+  })
+
+  /**
+   * Authentication: Logout user
+   *
+   * @param sessionToken - Session token to invalidate
+   * @returns Success status
+   */
+  ipcMain.handle('auth-logout', async (_, sessionToken: string) => {
+    console.log('[IPC] User logout request')
+    
+    try {
+      authService.logout(sessionToken)
+      console.log('[IPC] User logged out successfully')
+      return { success: true }
+    } catch (error) {
+      console.error('[IPC] Logout error:', error)
+      return { success: false, error: 'Logout failed' }
+    }
+  })
+
+  /**
+   * Authentication: Validate session
+   *
+   * @param sessionToken - Session token to validate
+   * @returns Session validation result with user data
+   */
+  ipcMain.handle('auth-validate-session', async (_, sessionToken: string) => {
+    const validation = authService.validateSession(sessionToken)
+    
+    if (validation.valid && validation.userId) {
+      const userData = authService.getUserBySession(sessionToken)
+      return {
+        success: true,
+        valid: true,
+        user: userData,
+      }
+    }
+    
+    return {
+      success: true,
+      valid: false,
+      error: validation.error,
+    }
+  })
+
+  /**
+   * Get exam history for authenticated user
+   *
+   * @param sessionToken - Session token for authentication
+   * @param limit - Maximum number of exams to return (default: 50)
+   * @returns Array of user's exam history
+   */
+  ipcMain.handle('get-exam-history', async (_, sessionToken: string, limit: number = 50) => {
+    console.log('[IPC] Get exam history request')
+    
+    try {
+      // Validate session
+      const validation = authService.validateSession(sessionToken)
+      
+      if (!validation.valid || !validation.userId) {
+        return {
+          success: false,
+          error: 'Invalid session. Please log in again.',
+        }
+      }
+      
+      // Get exam history from database
+      const examHistory = databaseService.getExamHistory(validation.userId, limit)
+      
+      console.log('[IPC] Retrieved', examHistory.length, 'exam records for user:', validation.userId)
+      
+      return {
+        success: true,
+        exams: examHistory,
+      }
+    } catch (error) {
+      console.error('[IPC] Get exam history error:', error)
+      return {
+        success: false,
+        error: 'Failed to retrieve exam history.',
+      }
+    }
+  })
+
+  /**
+   * Save exam to history
+   *
+   * @param sessionToken - Session token for authentication
+   * @param userId - User ID from frontend
+   * @param examData - Exam metadata (title, topic, etc.)
+   * @param pdfPath - Path to generated PDF file
+   * @returns Success status with exam ID
+   */
+  ipcMain.handle('save-exam-to-history', async (_, sessionToken: string, userId: number, examData: { title: string, topic: string, totalQuestions: number }, pdfPath: string) => {
+    console.log('[IPC] Save exam to history request for user:', userId, 'with session token:', sessionToken ? 'present' : 'missing')
+    
+    try {
+      // Validate that the user exists in the database
+      const validation = authService.validateUserExists(userId)
+      console.log('[IPC] User validation result:', validation)
+      
+      if (!validation.valid || !validation.userId) {
+        console.log('[IPC] User validation failed, reason:', validation.error)
+        return {
+          success: false,
+          error: 'Invalid user. Please log in again.',
+        }
+      }
+      
+      // Save exam to database
+      const examId = databaseService.saveExam(
+        validation.userId,
+        examData.title,
+        examData.topic,
+        examData.totalQuestions,
+        pdfPath
+      )
+      
+      console.log('[IPC] Exam saved to history with ID:', examId)
+      
+      return {
+        success: true,
+        examId: examId,
+      }
+    } catch (error) {
+      console.error('[IPC] Save exam to history error:', error)
+      return {
+        success: false,
+        error: 'Failed to save exam to history.',
+      }
+    }
+  })
 
   console.log('[IPC] Handlers registered successfully')
 }

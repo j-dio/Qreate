@@ -101,6 +101,34 @@ const electronAPI = {
       return ipcRenderer.invoke('groq-get-usage-status', userId)
     },
   },
+
+  // Authentication operations
+  auth: {
+    register: (name: string, email: string, password: string) => {
+      return ipcRenderer.invoke('auth-register', name, email, password)
+    },
+
+    login: (email: string, password: string) => {
+      return ipcRenderer.invoke('auth-login', email, password)
+    },
+
+    logout: (sessionToken: string) => {
+      return ipcRenderer.invoke('auth-logout', sessionToken)
+    },
+
+    validateSession: (sessionToken: string) => {
+      return ipcRenderer.invoke('auth-validate-session', sessionToken)
+    },
+  },
+
+  // Exam history operations
+  getExamHistory: (sessionToken: string, limit?: number) => {
+    return ipcRenderer.invoke('get-exam-history', sessionToken, limit)
+  },
+
+  saveExamToHistory: (sessionToken: string, userId: number, examData: { title: string, topic: string, totalQuestions: number }, pdfPath: string) => {
+    return ipcRenderer.invoke('save-exam-to-history', sessionToken, userId, examData, pdfPath)
+  },
 }
 
 // Expose the API to renderer

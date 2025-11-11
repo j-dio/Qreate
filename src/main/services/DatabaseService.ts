@@ -25,6 +25,7 @@ import * as fs from 'fs'
 export interface User {
   id: number
   email: string
+  name: string
   password_hash: string
   created_at: string
 }
@@ -87,10 +88,22 @@ export class DatabaseService {
       CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         email TEXT UNIQUE NOT NULL,
+        name TEXT NOT NULL DEFAULT '',
         password_hash TEXT NOT NULL,
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
       )
     `)
+
+    // Add name column to existing users table if it doesn't exist (migration)
+    try {
+      this.db.exec(`
+        ALTER TABLE users ADD COLUMN name TEXT NOT NULL DEFAULT ''
+      `)
+      console.log('[Database] Added name column to users table')
+    } catch (error) {
+      // Column already exists or other error - this is expected for new installations
+      // SQLite will throw "duplicate column name" error if column exists
+    }
 
     // User usage tracking table
     this.db.exec(`
@@ -306,21 +319,35 @@ export class DatabaseService {
   }
 
   /**
+   * Get user by ID
+   *
+   * @param userId - User ID
+   * @returns User object or undefined if not found
+   */
+  getUserById(userId: number): User | undefined {
+    const stmt = this.db.prepare(`
+      SELECT * FROM users WHERE id = ?
+    `)
+    return stmt.get(userId) as User | undefined
+  }
+
+  /**
    * Create new user
    *
    * @param email - User email
+   * @param name - User's full name
    * @param passwordHash - Bcrypt password hash
    * @returns User ID
    */
-  createUser(email: string, passwordHash: string): number {
+  createUser(email: string, name: string, passwordHash: string): number {
     const result = this.db
       .prepare(
         `
-      INSERT INTO users (email, password_hash)
-      VALUES (?, ?)
+      INSERT INTO users (email, name, password_hash)
+      VALUES (?, ?, ?)
     `
       )
-      .run(email, passwordHash)
+      .run(email, name, passwordHash)
 
     const userId = result.lastInsertRowid as number
     console.log('[Database] User created:', userId)

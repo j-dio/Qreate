@@ -20,11 +20,13 @@
  */
 
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
 import { AppLayout } from './components/layout/AppLayout'
 import { HomePage } from './pages/HomePage'
 import { LoginPage } from './pages/LoginPage'
 import { SignupPage } from './pages/SignupPage'
 import { SettingsPage } from './pages/SettingsPage'
+import { MyExamsPage } from './pages/MyExamsPage'
 import { FileUploadPage } from './pages/FileUploadPage'
 import { ExamTypeSelectionPage } from './pages/ExamTypeSelectionPage'
 import { DifficultyDistributionPage } from './pages/DifficultyDistributionPage'
@@ -66,6 +68,64 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 }
 
 function App() {
+  const user = useAppStore(state => state.user)
+  const sessionToken = useAppStore(state => state.sessionToken)
+  const setUserAndSession = useAppStore(state => state.setUserAndSession)
+  const logout = useAppStore(state => state.logout)
+  const [isInitializing, setIsInitializing] = useState(true)
+
+  // Validate session on app startup
+  useEffect(() => {
+    const validateExistingSession = async () => {
+      // If we have a session token in storage, validate it
+      if (sessionToken && !user) {
+        try {
+          const result = await window.electron.auth.validateSession(sessionToken)
+          
+          if (result.success && result.valid && result.user) {
+            // Session is valid - restore user data
+            setUserAndSession(
+              {
+                id: result.user.id.toString(),
+                email: result.user.email,
+                name: result.user.name,
+                createdAt: result.user.created_at,
+                chatgptConnected: false,
+                googleDriveConnected: false,
+                aiConnected: false,
+              },
+              sessionToken
+            )
+            console.log('[Auth] Session restored for user:', result.user.email)
+          } else {
+            // Session is invalid - clear it
+            logout()
+            console.log('[Auth] Invalid session cleared')
+          }
+        } catch (error) {
+          console.error('[Auth] Session validation failed:', error)
+          logout()
+        }
+      }
+      
+      setIsInitializing(false)
+    }
+
+    validateExistingSession()
+  }, [sessionToken, user, setUserAndSession, logout])
+
+  // Show loading screen while validating session
+  if (isInitializing) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="mb-4 text-2xl font-bold">Qreate</div>
+          <div className="text-muted-foreground">Loading...</div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <BrowserRouter>
       <Routes>
@@ -101,6 +161,14 @@ function App() {
           element={
             <ProtectedRoute>
               <SettingsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/my-exams"
+          element={
+            <ProtectedRoute>
+              <MyExamsPage />
             </ProtectedRoute>
           }
         />

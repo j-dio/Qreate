@@ -39,7 +39,7 @@ const passwordRequirements: PasswordRequirement[] = [
 
 export function SignupPage() {
   const navigate = useNavigate()
-  const setUser = useAppStore(state => state.setUser)
+  const setUserAndSession = useAppStore(state => state.setUserAndSession)
 
   const [formData, setFormData] = useState({
     name: '',
@@ -104,23 +104,29 @@ export function SignupPage() {
     setErrors({})
 
     try {
-      // TODO: Replace with actual registration API call
-      // For now, we'll simulate a registration
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      // Call real authentication API
+      const result = await window.electron.auth.register(formData.name, formData.email, formData.password)
 
-      // Mock successful registration
-      setUser({
-        id: Date.now().toString(),
-        email: formData.email,
-        name: formData.name,
-        createdAt: new Date().toISOString(),
-        chatgptConnected: false,
-        googleDriveConnected: false,
-        aiConnected: false,
-      })
+      if (result.success && result.user && result.sessionToken) {
+        // Set user and session in store
+        setUserAndSession(
+          {
+            id: result.user.id.toString(),
+            email: result.user.email,
+            name: result.user.name,
+            createdAt: result.user.created_at,
+            chatgptConnected: false,
+            googleDriveConnected: false,
+            aiConnected: false,
+          },
+          result.sessionToken
+        )
 
-      // Navigate to home page
-      navigate('/')
+        // Navigate to home page
+        navigate('/')
+      } else {
+        setErrors({ general: result.error || 'Registration failed. Please try again.' })
+      }
     } catch (error) {
       setErrors({ general: 'Registration failed. Please try again.' })
     } finally {

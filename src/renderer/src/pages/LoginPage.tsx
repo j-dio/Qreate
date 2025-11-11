@@ -20,7 +20,7 @@ import { useAppStore } from '../store/useAppStore'
 
 export function LoginPage() {
   const navigate = useNavigate()
-  const setUser = useAppStore(state => state.setUser)
+  const setUserAndSession = useAppStore(state => state.setUserAndSession)
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -55,25 +55,31 @@ export function LoginPage() {
     setErrors({})
 
     try {
-      // TODO: Replace with actual authentication API call
-      // For now, we'll simulate a login
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      // Call real authentication API
+      const result = await window.electron.auth.login(email, password)
 
-      // Mock successful login
-      setUser({
-        id: '1',
-        email,
-        name: email.split('@')[0], // Use email username as name for now
-        createdAt: new Date().toISOString(),
-        chatgptConnected: false,
-        googleDriveConnected: false,
-        aiConnected: false,
-      })
+      if (result.success && result.user && result.sessionToken) {
+        // Set user and session in store
+        setUserAndSession(
+          {
+            id: result.user.id.toString(),
+            email: result.user.email,
+            name: result.user.name,
+            createdAt: result.user.created_at,
+            chatgptConnected: false,
+            googleDriveConnected: false,
+            aiConnected: false,
+          },
+          result.sessionToken
+        )
 
-      // Navigate to home page
-      navigate('/')
+        // Navigate to home page
+        navigate('/')
+      } else {
+        setErrors({ general: result.error || 'Login failed. Please check your credentials.' })
+      }
     } catch (error) {
-      setErrors({ general: 'Login failed. Please check your credentials.' })
+      setErrors({ general: 'Login failed. Please try again.' })
     } finally {
       setIsLoading(false)
     }

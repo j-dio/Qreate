@@ -83,6 +83,7 @@ export interface AppSettings {
 interface AppState {
   // State
   user: User | null
+  sessionToken: string | null // Session token for authentication
   projects: Project[]
   settings: AppSettings
   apiCredentials: ApiCredentials
@@ -90,6 +91,8 @@ interface AppState {
 
   // Actions (functions that modify state)
   setUser: (user: User | null) => void
+  setSession: (sessionToken: string | null) => void
+  setUserAndSession: (user: User | null, sessionToken: string | null) => void
   updateUser: (updates: Partial<User>) => void
   addProject: (project: Project) => void
   updateProject: (id: string, updates: Partial<Project>) => void
@@ -98,6 +101,7 @@ interface AppState {
   setApiCredentials: (credentials: Partial<ApiCredentials>) => void
   setAIProvider: (provider: AIProviderType) => void // Set selected provider
   getAIProviderKey: () => string | null // Get API key for current provider
+  logout: () => void // Clear user data and session
 }
 
 /**
@@ -110,6 +114,7 @@ export const useAppStore = create<AppState>()(
     (set, get) => ({
       // Initial state
       user: null,
+      sessionToken: null,
       projects: [],
       settings: {
         theme: 'system',
@@ -133,10 +138,16 @@ export const useAppStore = create<AppState>()(
       // Actions
       setUser: user => set({ user }),
 
+      setSession: sessionToken => set({ sessionToken }),
+
+      setUserAndSession: (user, sessionToken) => set({ user, sessionToken }),
+
       updateUser: updates =>
         set(state => ({
           user: state.user ? { ...state.user, ...updates } : null,
         })),
+
+      logout: () => set({ user: null, sessionToken: null }),
 
       addProject: project =>
         set(state => ({

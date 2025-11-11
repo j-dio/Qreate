@@ -32,6 +32,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { useFileUploadStore } from '../store/useFileUploadStore'
 import { useExamConfigStore } from '../store/useExamConfigStore'
+import { useAppStore } from '../store/useAppStore'
 
 /**
  * State passed from ExamGenerationProgressPage
@@ -54,11 +55,14 @@ export function ExamSuccessPage() {
   const uploadedFiles = useFileUploadStore(state => state.uploadedFiles)
   const totalQuestions = useExamConfigStore(state => state.getTotalQuestions())
   const questionTypes = useExamConfigStore(state => state.questionTypes)
+  const user = useAppStore(state => state.user)
+  const sessionToken = useAppStore(state => state.sessionToken)
 
   // Local state
   const [pdfStatus, setPDFStatus] = useState<PDFStatus>('idle')
   const [error, setError] = useState<string | null>(null)
   const [pdfPath, setPdfPath] = useState<string | null>(null)
+  const [savedToHistory, setSavedToHistory] = useState(false)
 
   // Redirect if no exam data
   useEffect(() => {
@@ -111,6 +115,40 @@ export function ExamSuccessPage() {
       setPDFStatus('success')
 
       console.log('[ExamSuccessPage] PDF generated:', result.path)
+
+      // Save exam to history database
+      if (sessionToken && user) {
+        try {
+          console.log('[ExamSuccessPage] Saving exam to history...')
+          
+          // Parse exam content to extract topic/title
+          const examLines = state.exam.split('\n')
+          const topicLine = examLines.find(line => line.trim().startsWith('General Topic:') || line.trim().startsWith('Topic:'))
+          const topic = topicLine ? topicLine.replace(/^(General )?Topic:\s*/i, '').trim() : 'Generated Exam'
+          const title = `${topic} - ${new Date().toLocaleDateString()}`
+
+          const historyResult = await window.electron.saveExamToHistory(
+            sessionToken!,
+            parseInt(user!.id),
+            {
+              title: title,
+              topic: topic,
+              totalQuestions: totalQuestions,
+            },
+            result.path!
+          )
+
+          if (historyResult.success) {
+            console.log('[ExamSuccessPage] Exam saved to history with ID:', historyResult.examId)
+            setSavedToHistory(true)
+          } else {
+            console.warn('[ExamSuccessPage] Failed to save exam to history:', historyResult.error)
+          }
+        } catch (historyError) {
+          console.error('[ExamSuccessPage] Error saving to history:', historyError)
+          // Don't fail PDF generation if history save fails
+        }
+      }
     } catch (error) {
       console.error('[ExamSuccessPage] Failed to generate PDF:', error)
       setError(error instanceof Error ? error.message : 'Failed to generate PDF')
@@ -232,9 +270,17 @@ export function ExamSuccessPage() {
             {/* Success */}
             {pdfStatus === 'success' && pdfPath && (
               <div className="space-y-3">
-                <div className="flex items-center gap-2 text-green-600">
-                  <CheckCircle2 className="h-5 w-5" />
-                  <span className="font-medium">PDF generated successfully!</span>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-green-600">
+                    <CheckCircle2 className="h-5 w-5" />
+                    <span className="font-medium">PDF generated successfully!</span>
+                  </div>
+                  {savedToHistory && (
+                    <div className="flex items-center gap-2 text-blue-600">
+                      <CheckCircle2 className="h-4 w-4" />
+                      <span className="text-sm">Saved to your exam history</span>
+                    </div>
+                  )}
                 </div>
                 <p className="text-xs text-muted-foreground break-all">Saved to: {pdfPath}</p>
                 <div className="flex gap-3">
@@ -275,6 +321,12 @@ export function ExamSuccessPage() {
             <FileText className="h-4 w-4 mr-2" />
             Create Another Exam
           </Button>
+          {savedToHistory && (
+            <Button onClick={() => navigate('/my-exams')} variant="outline" size="lg">
+              <FolderOpen className="h-4 w-4 mr-2" />
+              View My Exams
+            </Button>
+          )}
           <Button onClick={() => navigate('/')} variant="outline" size="lg">
             <Home className="h-4 w-4 mr-2" />
             Go Home
