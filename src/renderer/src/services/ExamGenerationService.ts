@@ -42,6 +42,7 @@ export interface ExamGenerationConfig {
   totalQuestions: number
   aiProvider: AIProviderType
   apiKey: string
+  userId: number // Add user ID to config
 }
 
 /**
@@ -310,7 +311,7 @@ export class ExamGenerationService {
 
       // GROQ BACKEND: Call backend Groq API instead of user-provided AI
       console.log('[ExamGenerationService] Using Groq backend for generation')
-      const groqResult = await window.electron.groq.generateExam(examConfig, fileContent)
+      const groqResult = await window.electron.groq.generateExam(examConfig, fileContent, this.config.userId)
 
       if (!groqResult.success) {
         throw new Error(groqResult.error || 'Groq generation failed')

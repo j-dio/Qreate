@@ -27,6 +27,7 @@ import { Button } from '../components/ui/Button'
 import { useExamGenerationStore } from '../store/useExamGenerationStore'
 import { useFileUploadStore } from '../store/useFileUploadStore'
 import { useExamConfigStore } from '../store/useExamConfigStore'
+import { useAppStore } from '../store/useAppStore'
 
 export function ExamGenerationProgressPage() {
   const navigate = useNavigate()
@@ -48,15 +49,20 @@ export function ExamGenerationProgressPage() {
   const questionTypes = useExamConfigStore(state => state.questionTypes)
   const difficultyDistribution = useExamConfigStore(state => state.difficultyDistribution)
   const totalQuestions = useExamConfigStore(state => state.getTotalQuestions())
+  const user = useAppStore(state => state.user)
 
   // Validate user came from proper workflow
   useEffect(() => {
+    if (!user) {
+      navigate('/login')
+      return
+    }
     if (uploadedFiles.length === 0 || totalQuestions === 0) {
       navigate('/create-exam')
       return
     }
     // No need to check API keys with Groq backend - it's managed server-side
-  }, [uploadedFiles, totalQuestions, navigate])
+  }, [user, uploadedFiles, totalQuestions, navigate])
 
   // Start generation automatically on mount
   useEffect(() => {
@@ -122,7 +128,7 @@ export function ExamGenerationProgressPage() {
         totalQuestions,
       }
 
-      const examResult = await window.electron.groq.generateExam(config, combinedText)
+      const examResult = await window.electron.groq.generateExam(config, combinedText, parseInt(user!.id))
 
       if (examResult.success && examResult.content) {
         // The IPC handler returns the exam content as 'content', not 'exam'

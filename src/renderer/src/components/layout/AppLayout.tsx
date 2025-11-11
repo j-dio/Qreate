@@ -14,8 +14,8 @@
  * └─────────────────────────────────┘
  */
 
-import { FileText, LogOut, Settings } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { FileText, LogOut, Settings, FolderOpen, Plus, Home } from 'lucide-react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useAppStore } from '../../store/useAppStore'
 import { Button } from '../ui/Button'
 
@@ -25,12 +25,13 @@ interface AppLayoutProps {
 
 export function AppLayout({ children }: AppLayoutProps) {
   const user = useAppStore(state => state.user)
-  const setUser = useAppStore(state => state.setUser)
+  const logout = useAppStore(state => state.logout)
   const navigate = useNavigate()
+  const location = useLocation()
 
   const handleLogout = () => {
-    // Clear user from store
-    setUser(null)
+    // Clear user and session from store
+    logout()
     // Navigate to login page
     navigate('/login')
   }
@@ -45,6 +46,37 @@ export function AppLayout({ children }: AppLayoutProps) {
             <FileText className="h-6 w-6 text-primary" />
             <h1 className="text-xl font-bold">Qreate</h1>
           </div>
+
+          {/* Navigation */}
+          <nav className="flex items-center gap-1 ml-8">
+            <Button
+              variant={location.pathname === '/' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => navigate('/')}
+              className="gap-2"
+            >
+              <Home className="h-4 w-4" />
+              Home
+            </Button>
+            <Button
+              variant={location.pathname === '/my-exams' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => navigate('/my-exams')}
+              className="gap-2"
+            >
+              <FolderOpen className="h-4 w-4" />
+              My Exams
+            </Button>
+            <Button
+              variant={location.pathname.startsWith('/create-exam') ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => navigate('/create-exam')}
+              className="gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Create Exam
+            </Button>
+          </nav>
 
           {/* Spacer */}
           <div className="flex-1" />

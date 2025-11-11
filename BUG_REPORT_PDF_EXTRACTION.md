@@ -18,16 +18,19 @@ When users upload a PDF file and attempt to generate an exam, the process fails 
 ## Timeline of Attempted Fixes
 
 ### Fix Attempt #1: File Path Not Captured
+
 **Problem:** File paths weren't being stored when files were uploaded.
 **Error:** `File path not available for [filename].pdf`
 
 **Solution Implemented:**
+
 - Modified `src/main/index.ts` to add `open-file-dialog` IPC handler using Electron's dialog API
 - Modified `src/preload/index.ts` to expose `openFileDialog()` method
 - Modified `src/renderer/src/components/FileUploadZone.tsx` to use Electron dialog instead of HTML file input
 - Added `get-file-stats` IPC handler to fetch file metadata (name, size, type, path)
 
 **Files Modified:**
+
 - `src/main/index.ts` (lines 28-85)
 - `src/preload/index.ts` (lines 40-48)
 - `src/renderer/src/components/FileUploadZone.tsx` (handleFilePaths function, handleClick function)
@@ -38,10 +41,12 @@ When users upload a PDF file and attempt to generate an exam, the process fails 
 ---
 
 ### Fix Attempt #2: PDF-Parse Module Import
+
 **Problem:** `pdf-parse` module not importing correctly.
 **Error:** `pdfParse is not a function`
 
 **Solution Attempt A:** Changed from CommonJS `require` to ES6 `import`
+
 ```typescript
 // Before
 const pdfParse = require('pdf-parse')
@@ -54,6 +59,7 @@ const parsePdf = (pdfParse as any).default || pdfParse
 **Result:** ❌ **FAILED** - Same error persisted
 
 **Solution Attempt B:** Tried using `/node` export path
+
 ```typescript
 const pdfParse = require('pdf-parse/node')
 ```
@@ -69,6 +75,7 @@ console.log('Module keys:', Object.keys(pdfParseModule))
 ```
 
 **Discovery:**
+
 ```
 Module keys: [
   'AbortException',
@@ -95,10 +102,12 @@ Module keys: [
 ---
 
 ### Fix Attempt #3: Using PDFParse Class
+
 **Problem:** Incorrect API usage - trying to call non-existent methods
 **Error:** `parser.parse is not a function`
 
 **Solution Attempt A:** Create PDFParse instance and call `.parse()`
+
 ```typescript
 const parser = new pdfParseModule.PDFParse()
 const data = await parser.parse(dataBuffer)
@@ -107,6 +116,7 @@ const data = await parser.parse(dataBuffer)
 **Result:** ❌ **FAILED** - `parse()` method doesn't exist
 
 **Solution Attempt B:** Add configuration options
+
 ```typescript
 const options = {
   verbosity: 0,
@@ -126,6 +136,7 @@ console.log('Parser prototype:', Object.getOwnPropertyNames(Object.getPrototypeO
 ```
 
 **Discovery:**
+
 ```
 Parser prototype: [
   'constructor',
@@ -153,10 +164,12 @@ Parser prototype: [
 ---
 
 ### Fix Attempt #4: Correct API Usage
+
 **Problem:** Incorrect parameter type for `load()` method
 **Error:** `getDocument - no 'url' parameter provided`
 
 **Solution Attempt A:** Pass buffer to load()
+
 ```typescript
 await parser.load(dataBuffer)
 const text = await parser.getText()
@@ -165,6 +178,7 @@ const text = await parser.getText()
 **Result:** ❌ **FAILED** - `load()` expects a URL or file path, not a buffer
 
 **Solution Attempt B:** Convert file path to file:// URL
+
 ```typescript
 const fileUrl = `file:///${filePath.replace(/\\/g, '/')}`
 await parser.load(fileUrl)
@@ -251,24 +265,32 @@ private async extractFromPDF(filePath: string): Promise<TextExtractionResult> {
 ## Alternative Solutions to Consider
 
 ### Option 1: Try Different PDF Library
+
 Consider using a different, more straightforward PDF library:
+
 - `pdf2json` - Simpler API, CommonJS friendly
 - `pdfjs-dist` - Mozilla's PDF.js library
 - `pdf-lib` - Modern TypeScript library
 
 ### Option 2: Use Old pdf-parse Version
+
 The current version (2.4.5) might have API changes. Try:
+
 ```bash
 npm install pdf-parse@1.1.1
 ```
 
 ### Option 3: Read Documentation
+
 Check official docs/examples for `pdf-parse` v2.4.5:
+
 - GitHub: https://github.com/mehmet-kozan/pdf-parse
 - npm: https://www.npmjs.com/package/pdf-parse
 
 ### Option 4: Use Buffer Instead of File URL
+
 Try reading the file and passing different data formats:
+
 ```typescript
 const dataBuffer = await fs.readFile(filePath)
 const uint8Array = new Uint8Array(dataBuffer)
@@ -293,12 +315,14 @@ await parser.load({ data: uint8Array })
 ## Debug Logs to Monitor
 
 **Terminal (Main Process):**
+
 - File path capture: `[FileUploadStore] Adding file: { hasPath: true }`
 - PDF module loading: `[PDF Debug] Module keys: [...]`
 - PDF loading: `[PDF Debug] Loading PDF from: file:///...`
 - Text extraction: `[PDF Debug] Successfully extracted text! Length: ...`
 
 **DevTools Console (Renderer Process):**
+
 - File upload: Upload success messages
 - Generation progress: Progress bar updates
 - Error messages: If generation fails
@@ -314,11 +338,13 @@ await parser.load({ data: uint8Array })
 After multiple failed attempts with single-strategy approaches, a comprehensive solution has been implemented in `src/main/services/FileTextExtractor.ts` (lines 95-272) that tries **6 different strategies** to extract PDF text:
 
 **Strategy 1: Old pdf-parse API (Direct Function Call)**
+
 - Most reliable and commonly used approach
 - Tries `pdfParseModule(buffer)` - direct function call with buffer
 - Tries `pdfParseModule.default(buffer)` - default export with buffer
 
 **Strategy 2: PDFParse Class with 4 Different Load Approaches**
+
 - **Approach 2a:** Load with raw buffer
 - **Approach 2b:** Load with `{data: Uint8Array}`
 - **Approach 2c:** Load with `file://` URL (using `pathToFileURL`)
@@ -374,6 +400,7 @@ private async extractFromPDF(filePath: string): Promise<TextExtractionResult> {
 ### Next Steps if This Fails
 
 If all 6 strategies fail (unlikely), consider:
+
 1. **Check PDF file:** May be corrupted, encrypted, or image-only
 2. **Try different PDF:** Test with known good PDF file
 3. **Switch PDF library:** Use `pdfjs-dist`, `pdf2json`, or `pdf-lib`
@@ -382,6 +409,7 @@ If all 6 strategies fail (unlikely), consider:
 ### Status
 
 ✅ **IMPLEMENTED AND DEPLOYED**
+
 - Code: `src/main/services/FileTextExtractor.ts:95-272`
 - Build: Successful (bundle size: 14.83 kB)
 - Server: Running on port 5173
@@ -390,6 +418,7 @@ If all 6 strategies fail (unlikely), consider:
 ### Next Action
 
 **User should now:**
+
 1. Open the Qreate app at http://localhost:5173
 2. Upload a PDF file
 3. Configure and generate an exam
@@ -405,6 +434,7 @@ If all 6 strategies fail (unlikely), consider:
 ### Why We Reverted
 
 After extensive debugging attempts with multiple PDF libraries:
+
 1. **pdf-parse** - Multiple API strategies failed (6 different approaches)
 2. **pdfjs-dist** - ES module compatibility issues with Electron/require()
 3. Time invested exceeded reasonable threshold for single feature
@@ -412,9 +442,9 @@ After extensive debugging attempts with multiple PDF libraries:
 
 ### Libraries Tried and Why They Failed
 
-| Library | Attempts | Issues |
-|---------|----------|--------|
-| pdf-parse@2.4.5 | 6 strategies | API incompatibility, module structure issues |
+| Library            | Attempts     | Issues                                        |
+| ------------------ | ------------ | --------------------------------------------- |
+| pdf-parse@2.4.5    | 6 strategies | API incompatibility, module structure issues  |
 | pdfjs-dist@4.0.379 | 2 approaches | ES module vs CommonJS, top-level await issues |
 
 ### Current State After Revert
@@ -422,6 +452,7 @@ After extensive debugging attempts with multiple PDF libraries:
 **Commit:** `4f78365` - "feat: Implement Phase 3 Exam Generation with progress tracking"
 
 **What Works:**
+
 - ✅ Word documents (.docx, .doc) via mammoth
 - ✅ Text files (.txt) via direct fs.readFile
 - ✅ Images (.png, .jpg) via Tesseract OCR
@@ -429,6 +460,7 @@ After extensive debugging attempts with multiple PDF libraries:
 - ✅ Multi-LLM provider support (Gemini, OpenAI)
 
 **What Doesn't Work:**
+
 - ❌ PDF files (.pdf) - placeholders used instead
 
 **Server Status:** ✅ Running on port 5176
@@ -439,16 +471,21 @@ After extensive debugging attempts with multiple PDF libraries:
 ## Next Steps: PDF Support Options
 
 ### Option 1: Mark PDF as "Coming Soon" (Recommended)
+
 **Pros:**
+
 - Ship working product with .docx/.txt support now
 - Add PDF later when we find better library
 - Focus on other features (Google Docs export, etc.)
 
 **Cons:**
+
 - Users can't use PDF files (but they can use Word/text)
 
 ### Option 2: Try Simpler PDF Library
+
 **Libraries to consider:**
+
 - **`pdf2json`** - Simple API, CommonJS friendly
 - **`@pdf-lib/standard-fonts`** - Lightweight
 - **`node-pdfreader`** - Minimal dependencies
@@ -456,7 +493,9 @@ After extensive debugging attempts with multiple PDF libraries:
 **Approach:** Research and test one of these in a separate branch, don't block main development.
 
 ### Option 3: Convert PDF to Text Externally
+
 Users can convert PDF→Word/Text using:
+
 - Google Docs (Upload PDF → Download as .docx)
 - Adobe online tools
 - pdf2txt command line tools
@@ -470,11 +509,13 @@ Then upload the converted file to Qreate.
 **Ship the app without PDF support for now.**
 
 PDF extraction is a single feature that's proven complex. The app works great with:
+
 - Word documents (most common format for study materials)
 - Text files (simple, reliable)
 - Images (OCR works well)
 
 Add PDF support in a future update after:
+
 1. Completing Phase 4 (Google Docs export)
 2. Completing Phase 5 (Project management)
 3. Testing with real users to see if PDF is actually needed
@@ -494,6 +535,7 @@ Add PDF support in a future update after:
 ```
 
 **pdf-parse package.json exports:**
+
 ```json
 "exports": {
   ".": {
@@ -517,3 +559,8 @@ Add PDF support in a future update after:
 - **OS:** Windows (file paths use backslashes)
 
 Good luck with the fix! 🚀
+
+## Reminder
+
+Always record a compacted version of the detailed actions that we've done throughout the implementation process for future reference and place it in this file.
+Also do this in the cases of debugging features that are not working as expected.
