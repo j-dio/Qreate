@@ -19,7 +19,7 @@ npm run package      # Create installer/executable
 
 **Current Status**: ✅ PRODUCTION-READY - Full user authentication, exam history, Groq AI backend, and local PDF generation.
 
-**Latest Update**: Real authentication system implemented, exam history bug fixed - app ready for deployment.
+**Latest Update**: Hybrid weekly quota system and session persistence implemented. Dynamic prompt engineering in progress (see PROMPT_ENGINEERING_ISSUES.md).
 
 **Supported Files**: .txt, .docx (PDF extraction disabled)
 **User Quotas**: 10 exams/week, 3/day burst limit, 40/month, 10-100 questions per exam
