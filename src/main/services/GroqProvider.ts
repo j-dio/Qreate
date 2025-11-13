@@ -60,7 +60,7 @@ export interface ExamGenerationConfig {
  */
 const GROQ_CONFIG = {
   model: 'llama-3.3-70b-versatile',
-  maxTokens: 16384, // Safe for up to 100 items (tested)
+  maxTokens: 32768, // Increased for 100+ questions (llama-3.3-70b supports up to 128k)
   temperature: 0.7, // Balanced creativity and consistency
   topP: 0.9,
 } as const
@@ -239,16 +239,10 @@ export class GroqProvider {
    * 5. Output format specification
    */
   private buildExamPrompt(config: ExamGenerationConfig, sourceText: string): string {
-    // Extract question type configuration
-    const questionTypesText = Object.entries(config.questionTypes)
+    // Get selected question types with counts
+    const selectedTypes = Object.entries(config.questionTypes)
       .filter(([_, count]) => count && count > 0)
-      .map(([type, count]) => {
-        // Convert camelCase to readable format
-        const readable = type.replace(/([A-Z])/g, ' $1').trim()
-        const capitalized = readable.charAt(0).toUpperCase() + readable.slice(1)
-        return `  - ${capitalized}: ${count} question(s)`
-      })
-      .join('\n')
+      .map(([type, count]) => ({ type, count }))
 
     // Extract difficulty distribution
     const difficultyText = Object.entries(config.difficultyDistribution)
@@ -261,6 +255,12 @@ export class GroqProvider {
       })
       .join('\n')
 
+    // Build dynamic format section based on selected types
+    const formatSections = this.buildDynamicFormatSections(selectedTypes)
+    
+    // Build type-specific quality rules
+    const typeSpecificRules = this.buildTypeSpecificRules(selectedTypes)
+
     // Truncate source text if too long (Groq has 128k token limit, but let's be safe)
     const maxSourceLength = 100000 // ~25k words
     const truncatedSource =
@@ -268,14 +268,156 @@ export class GroqProvider {
         ? sourceText.substring(0, maxSourceLength) + '\n\n[... content truncated ...]'
         : sourceText
 
-    // Enhanced prompt with comprehensive quality improvements
-    return `You are an expert educational assessment creator. Your task is to generate a high-quality, comprehensive exam that accurately evaluates student understanding of the provided study material.
+    // Build the final prompt with dynamic content
+    return this.buildDynamicPrompt(selectedTypes, formatSections, typeSpecificRules, difficultyText, config, truncatedSource)
+  }
+
+  /**
+   * Build dynamic format sections based on selected question types
+   */
+  private buildDynamicFormatSections(selectedTypes: Array<{ type: string; count: number }>): string {
+    const sections: string[] = []
+    let questionNumber = 1
+
+    for (const { type, count } of selectedTypes) {
+      const section = this.buildFormatSectionForType(type, count, questionNumber)
+      sections.push(section)
+      questionNumber += count
+    }
+
+    return sections.join('\n\n')
+  }
+
+  /**
+   * Build format section for a specific question type
+   */
+  private buildFormatSectionForType(type: string, count: number, startNumber: number): string {
+    const endNumber = startNumber + count - 1
+    
+    switch (type) {
+      case 'multipleChoice':
+        return `Multiple Choice:
+
+${startNumber}. What is the primary function of...?
+   A. First option
+   B. Second option
+   C. Third option
+   D. Fourth option
+
+${startNumber + 1}. Which of the following is...?
+   A. Option A
+   B. Option B
+   C. Option C
+   D. Option D
+
+(Generate ${count} total multiple choice questions, numbered ${startNumber} to ${endNumber})`
+
+      case 'trueFalse':
+        return `True/False:
+
+${startNumber}. The process of cell division involves chromosome duplication.
+
+${startNumber + 1}. Mitosis results in two identical daughter cells.
+
+(Generate ${count} total true/false questions, numbered ${startNumber} to ${endNumber})`
+
+      case 'fillInTheBlanks':
+        return `Fill in the Blanks:
+
+${startNumber}. The process of _____ involves the breakdown of glucose.
+
+${startNumber + 1}. During photosynthesis, _____ is converted to oxygen.
+
+(Generate ${count} total fill-in-the-blank questions, numbered ${startNumber} to ${endNumber})`
+
+      case 'shortAnswer':
+        return `Short Answer:
+
+${startNumber}. Explain the process of cellular respiration.
+
+${startNumber + 1}. Describe the role of enzymes in metabolism.
+
+(Generate ${count} total short answer questions, numbered ${startNumber} to ${endNumber})`
+
+      case 'essay':
+        return `Essay Questions:
+
+${startNumber}. Analyze the impact of climate change on biodiversity.
+
+${startNumber + 1}. Evaluate the effectiveness of renewable energy sources.
+
+(Generate ${count} total essay questions, numbered ${startNumber} to ${endNumber})`
+
+      default:
+        return `${type}:
+
+${startNumber}. Sample question for ${type}
+
+(Generate ${count} total questions, numbered ${startNumber} to ${endNumber})`
+    }
+  }
+
+  /**
+   * Build type-specific quality rules
+   */
+  private buildTypeSpecificRules(selectedTypes: Array<{ type: string; count: number }>): string {
+    const rules: string[] = []
+
+    const hasMultipleChoice = selectedTypes.some(t => t.type === 'multipleChoice')
+    const hasTrueFalse = selectedTypes.some(t => t.type === 'trueFalse')
+    const hasFillInBlanks = selectedTypes.some(t => t.type === 'fillInTheBlanks')
+
+    if (hasMultipleChoice) {
+      rules.push(`**MULTIPLE CHOICE RULES:**
+- ALWAYS exactly 4 options (A, B, C, D), each on separate line
+- AVOID overusing "All of the above" or "None of the above" (use sparingly, max 10% of MC questions)
+- Make distractors plausible but clearly wrong based on the material
+- Distribute correct answers randomly across A, B, C, D (avoid patterns)`)
+    }
+
+    if (hasTrueFalse) {
+      rules.push(`**TRUE/FALSE RULES:**
+- Statements must be definitively true or false based on source material
+- Avoid absolute terms like "always" or "never" unless explicitly stated in material
+- Make statements clear and unambiguous`)
+    }
+
+    if (hasFillInBlanks) {
+      rules.push(`**FILL-IN-THE-BLANKS RULES:**
+- Use single underlines _____ for blanks
+- Make the missing term essential to understanding
+- Ensure only one correct answer fits the blank`)
+    }
+
+    return rules.join('\n\n')
+  }
+
+  /**
+   * Build the complete dynamic prompt
+   */
+  private buildDynamicPrompt(
+    selectedTypes: Array<{ type: string; count: number }>,
+    formatSections: string,
+    typeSpecificRules: string,
+    difficultyText: string,
+    config: ExamGenerationConfig,
+    truncatedSource: string
+  ): string {
+    const questionTypeSummary = selectedTypes
+      .map(({ type, count }) => {
+        const readable = type.replace(/([A-Z])/g, ' $1').trim()
+        const capitalized = readable.charAt(0).toUpperCase() + readable.slice(1)
+        return `  - ${capitalized}: ${count} question(s)`
+      })
+      .join('\n')
+
+    return `You are an expert educational assessment creator. Your task is to generate a high-quality exam that accurately evaluates student understanding of the provided study material.
 
 **CRITICAL QUALITY REQUIREMENTS:**
 
 1. **UNIQUENESS & NO REPETITION:** Each question must test a DIFFERENT concept, fact, or skill. No two questions should test the same information in different ways. Spread questions across ALL major topics in the material.
 
-2. **SOURCE FIDELITY:** Base questions STRICTLY on information explicitly stated in the study material. Do NOT infer, assume, or add external knowledge. If the material doesn't contain enough information for a question type, skip that question rather than guess.
+2. **SOURCE FIDELITY:** Base questions STRICTLY on information explicitly stated in the study material. Do NOT infer, assume, or add external knowledge.
 
 3. **DIFFICULTY ACCURACY:** Match each question precisely to its assigned difficulty level:
    - **Very Easy:** Direct recall of explicitly stated facts, definitions, basic terminology
@@ -286,14 +428,13 @@ export class GroqProvider {
 
 4. **COMPREHENSIVE COVERAGE:** Distribute questions evenly across all major topics/sections in the study material. Avoid clustering questions on only one topic.
 
-5. **ACADEMIC RIGOR:** All questions must be clear, unambiguous, and educationally sound. Ensure correct answers are definitively supported by the source material.
+${typeSpecificRules}
 
 **STRICT FORMATTING REQUIREMENTS:**
 - Generate ONLY the exam content - no introductions, explanations, or suggestions
 - Follow the format below EXACTLY - character for character
 - Number questions sequentially (1, 2, 3, etc.) across ALL types
 - Group questions by type as specified
-- For Multiple Choice: ALWAYS exactly 4 options (A, B, C, D), each on separate line, indented with 3 spaces
 
 **EXACT OUTPUT FORMAT:**
 
@@ -301,37 +442,20 @@ General Topic: [Extract the main subject/topic from the study material]
 
 ----Exam Content----
 
-Multiple Choice:
-
-1. [Question text here?]
-   A. [First option]
-   B. [Second option] 
-   C. [Third option]
-   D. [Fourth option]
-
-True/False:
-
-X. [Complete statement that can be definitively true or false based on source material.]
-
-Fill in the Blanks:
-
-Y. [Question text with _____ representing the blank to be filled.]
-
-[Continue for all requested question types...]
+${formatSections}
 
 [PAGE BREAK]
 
 ----Answer Key----
 
-1. A
-X. True
-Y. [correct word or phrase]
-[Continue for all questions...]
+1. [Answer]
+2. [Answer]
+[Continue for all questions sequentially...]
 
 **GENERATION REQUIREMENTS:**
 
 Question Types & Quantities:
-${questionTypesText}
+${questionTypeSummary}
 
 Total Questions: ${config.totalQuestions}
 
@@ -355,8 +479,14 @@ ${truncatedSource}
 - ✓ Questions distributed across all major topics
 - ✓ Correct answers are clearly supported by source text
 - ✓ Format followed exactly
+- ✓ ONLY generate the question types specified above
 
-**OUTPUT:**
-Generate the exam now following ALL requirements above. Prioritize quality over speed - ensure each question is unique, accurate, and properly difficulty-matched.`
+**CRITICAL:** 
+- DO NOT include any instructional text in your output
+- DO NOT include phrases like "Continue with", "Generate all", or any parenthetical instructions
+- START immediately with "General Topic:" and follow the format exactly
+- ONLY output the actual exam content and answer key
+
+**OUTPUT:**`
   }
 }

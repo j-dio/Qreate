@@ -33,10 +33,13 @@ export interface User {
 export interface UserUsage {
   user_id: number
   exams_today: number
+  exams_this_week: number
   exams_this_month: number
   last_daily_reset: string
+  last_weekly_reset: string
   last_monthly_reset: string
   total_exams_generated: number
+  last_exam_generated: string | null
 }
 
 export interface ExamRecord {
@@ -110,13 +113,38 @@ export class DatabaseService {
       CREATE TABLE IF NOT EXISTS user_usage (
         user_id INTEGER PRIMARY KEY,
         exams_today INTEGER NOT NULL DEFAULT 0,
+        exams_this_week INTEGER NOT NULL DEFAULT 0,
         exams_this_month INTEGER NOT NULL DEFAULT 0,
         last_daily_reset TEXT NOT NULL DEFAULT (datetime('now')),
+        last_weekly_reset TEXT NOT NULL DEFAULT (datetime('now')),
         last_monthly_reset TEXT NOT NULL DEFAULT (datetime('now')),
         total_exams_generated INTEGER NOT NULL DEFAULT 0,
+        last_exam_generated TEXT,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       )
     `)
+
+    // Migration: Add new columns for weekly tracking if they don't exist
+    try {
+      this.db.exec(`ALTER TABLE user_usage ADD COLUMN exams_this_week INTEGER NOT NULL DEFAULT 0`)
+      console.log('[Database] Added exams_this_week column to user_usage table')
+    } catch (error) {
+      // Column already exists
+    }
+
+    try {
+      this.db.exec(`ALTER TABLE user_usage ADD COLUMN last_weekly_reset TEXT NOT NULL DEFAULT (datetime('now'))`)
+      console.log('[Database] Added last_weekly_reset column to user_usage table')
+    } catch (error) {
+      // Column already exists
+    }
+
+    try {
+      this.db.exec(`ALTER TABLE user_usage ADD COLUMN last_exam_generated TEXT`)
+      console.log('[Database] Added last_exam_generated column to user_usage table')
+    } catch (error) {
+      // Column already exists
+    }
 
     // Exams history table
     this.db.exec(`
@@ -163,19 +191,26 @@ export class DatabaseService {
       this.db
         .prepare(
           `
-        INSERT INTO user_usage (user_id, exams_today, exams_this_month, last_daily_reset, last_monthly_reset, total_exams_generated)
-        VALUES (?, 0, 0, ?, ?, 0)
+        INSERT INTO user_usage (
+          user_id, exams_today, exams_this_week, exams_this_month, 
+          last_daily_reset, last_weekly_reset, last_monthly_reset, 
+          total_exams_generated, last_exam_generated
+        )
+        VALUES (?, 0, 0, 0, ?, ?, ?, 0, NULL)
       `
         )
-        .run(userId, now, now)
+        .run(userId, now, now, now)
 
       usage = {
         user_id: userId,
         exams_today: 0,
+        exams_this_week: 0,
         exams_this_month: 0,
         last_daily_reset: now,
+        last_weekly_reset: now,
         last_monthly_reset: now,
         total_exams_generated: 0,
+        last_exam_generated: null,
       }
     }
 
@@ -202,6 +237,32 @@ export class DatabaseService {
       usage.exams_today = 0
       usage.last_daily_reset = now.toISOString()
       console.log('[Database] Daily usage reset for user:', userId)
+    }
+
+    // Check if weekly reset needed (Monday at 00:00 UTC)
+    const lastWeeklyReset = new Date(usage.last_weekly_reset)
+    const currentWeekStart = new Date(now)
+    currentWeekStart.setUTCDate(now.getUTCDate() - now.getUTCDay() + 1) // Monday
+    currentWeekStart.setUTCHours(0, 0, 0, 0)
+    
+    const lastWeekStart = new Date(lastWeeklyReset)
+    lastWeekStart.setUTCDate(lastWeeklyReset.getUTCDate() - lastWeeklyReset.getUTCDay() + 1)
+    lastWeekStart.setUTCHours(0, 0, 0, 0)
+
+    if (currentWeekStart.getTime() > lastWeekStart.getTime()) {
+      this.db
+        .prepare(
+          `
+        UPDATE user_usage
+        SET exams_this_week = 0, last_weekly_reset = ?
+        WHERE user_id = ?
+      `
+        )
+        .run(now.toISOString(), userId)
+
+      usage.exams_this_week = 0
+      usage.last_weekly_reset = now.toISOString()
+      console.log('[Database] Weekly usage reset for user:', userId)
     }
 
     // Check if monthly reset needed
@@ -241,18 +302,22 @@ export class DatabaseService {
     // Ensure usage record exists (with auto-reset)
     this.getUserUsage(userId)
 
-    // Increment counters
+    const now = new Date().toISOString()
+
+    // Increment counters and update last exam timestamp
     this.db
       .prepare(
         `
       UPDATE user_usage
       SET exams_today = exams_today + 1,
+          exams_this_week = exams_this_week + 1,
           exams_this_month = exams_this_month + 1,
-          total_exams_generated = total_exams_generated + 1
+          total_exams_generated = total_exams_generated + 1,
+          last_exam_generated = ?
       WHERE user_id = ?
     `
       )
-      .run(userId)
+      .run(now, userId)
 
     console.log('[Database] Exam generation recorded for user:', userId)
   }

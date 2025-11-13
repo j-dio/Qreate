@@ -233,8 +233,40 @@ export class AuthService {
     
     if (!sessionData) {
       // Session not found in memory - this happens after app restart
-      // Try to extract user info from a persisted token format if we implement it
-      console.log('[AuthService] Session not found in memory, token may be from previous app session')
+      // Try to extract user info from token and validate against database
+      console.log('[AuthService] Session not found in memory, trying database fallback...')
+      
+      try {
+        // Parse session token to extract user ID
+        // Format: "session_[userId]_[timestamp]_[randomString]"
+        const tokenParts = sessionToken.split('_')
+        if (tokenParts.length >= 2 && tokenParts[0] === 'session') {
+          const userId = parseInt(tokenParts[1])
+          
+          if (!isNaN(userId)) {
+            // Check if user still exists in database
+            const user = this.db.getUserById(userId)
+            if (user) {
+              // Recreate session in memory for future use
+              const expiresAt = new Date()
+              expiresAt.setDate(expiresAt.getDate() + 7) // 7 days from now
+              
+              this.sessions.set(sessionToken, {
+                userId,
+                email: user.email,
+                expiresAt,
+                createdAt: new Date(),
+              })
+              
+              console.log('[AuthService] Session restored from database for user:', userId)
+              return { valid: true, userId }
+            }
+          }
+        }
+      } catch (error) {
+        console.error('[AuthService] Database fallback failed:', error)
+      }
+      
       return { valid: false, error: 'Session expired - please log in again' }
     }
 
@@ -299,7 +331,8 @@ export class AuthService {
       return null
     }
 
-    const user = this.db.getUserByEmail(this.sessions.get(sessionToken)!.email)
+    // Get user directly by ID (works with both in-memory and database fallback)
+    const user = this.db.getUserById(validation.userId)
     
     if (!user) {
       return null
@@ -321,8 +354,11 @@ export class AuthService {
    * @returns Session token string
    */
   private createSession(userId: number, email: string): string {
-    // Generate cryptographically secure random token
-    const sessionToken = crypto.randomBytes(SECURITY_CONFIG.sessionTokenLength).toString('hex')
+    // Generate cryptographically secure random token with embedded user ID
+    // Format: "session_[userId]_[timestamp]_[randomHex]"
+    const timestamp = Date.now().toString(36) // Base36 for compactness
+    const randomPart = crypto.randomBytes(16).toString('hex') // 32 chars
+    const sessionToken = `session_${userId}_${timestamp}_${randomPart}`
     
     // Session expires in 7 days
     const expiresAt = new Date()

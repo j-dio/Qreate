@@ -4,9 +4,11 @@
  * Enforces per-user quotas for exam generation using Groq backend.
  *
  * User Limits (Free Tier):
- * - 10 exams per day
- * - 100 exams per month
+ * - 10 exams per week
+ * - 3 exams per day (burst protection)
+ * - 40 exams per month
  * - 10-100 questions per exam
+ * - 30 seconds between exam generations (rate limiting)
  *
  * Why quotas?
  * - Prevents abuse of free backend service
@@ -24,10 +26,12 @@
 import { DatabaseService } from './DatabaseService'
 
 export interface UsageQuotas {
-  examsPerDay: number
+  examsPerWeek: number
+  dailyBurstLimit: number
   examsPerMonth: number
   minQuestionsPerExam: number
   maxQuestionsPerExam: number
+  rateLimitDelaySeconds: number
 }
 
 export interface UsageStatus {
@@ -35,13 +39,19 @@ export interface UsageStatus {
   reason?: string
   usage: {
     examsToday: number
+    examsThisWeek: number
     examsThisMonth: number
     totalExams: number
   }
   limits: UsageQuotas
   resetTimes: {
     dailyResetIn: number // milliseconds
+    weeklyResetIn: number // milliseconds
     monthlyResetIn: number // milliseconds
+  }
+  rateLimitInfo?: {
+    mustWaitSeconds: number
+    lastExamGenerated: string | null
   }
 }
 
@@ -54,10 +64,21 @@ export class UsageTrackingService {
 
     // Load quotas from environment variables with fallback defaults
     this.quotas = {
-      examsPerDay: parseInt(process.env.MAX_EXAMS_PER_DAY || '10'),
-      examsPerMonth: parseInt(process.env.MAX_EXAMS_PER_MONTH || '100'),
+      examsPerWeek: parseInt(process.env.MAX_EXAMS_PER_WEEK || '10'),
+      dailyBurstLimit: parseInt(process.env.DAILY_BURST_LIMIT || '3'),
+      examsPerMonth: parseInt(process.env.MAX_EXAMS_PER_MONTH || '40'),
       minQuestionsPerExam: parseInt(process.env.MIN_QUESTIONS_PER_EXAM || '10'),
       maxQuestionsPerExam: parseInt(process.env.MAX_QUESTIONS_PER_EXAM || '100'),
+      rateLimitDelaySeconds: parseInt(process.env.RATE_LIMIT_DELAY_SECONDS || '30'),
+    }
+
+    // Override for testing/development
+    if (process.env.NODE_ENV === 'development' || process.env.ENABLE_STRESS_TESTING === 'true') {
+      this.quotas.examsPerWeek = 700
+      this.quotas.dailyBurstLimit = 100
+      this.quotas.examsPerMonth = 3000
+      this.quotas.rateLimitDelaySeconds = 0
+      console.log('[UsageTracking] Testing mode enabled - quotas increased')
     }
 
     console.log('[UsageTracking] Initialized with quotas:', this.quotas)
@@ -84,11 +105,12 @@ export class UsageTrackingService {
         reason: `Minimum ${this.quotas.minQuestionsPerExam} questions required`,
         usage: {
           examsToday: usage.exams_today,
+          examsThisWeek: usage.exams_this_week,
           examsThisMonth: usage.exams_this_month,
           totalExams: usage.total_exams_generated,
         },
         limits: this.quotas,
-        resetTimes: this.calculateResetTimes(usage.last_daily_reset, usage.last_monthly_reset),
+        resetTimes: this.calculateResetTimes(usage),
       }
     }
 
@@ -98,24 +120,63 @@ export class UsageTrackingService {
         reason: `Maximum ${this.quotas.maxQuestionsPerExam} questions allowed`,
         usage: {
           examsToday: usage.exams_today,
+          examsThisWeek: usage.exams_this_week,
           examsThisMonth: usage.exams_this_month,
           totalExams: usage.total_exams_generated,
         },
         limits: this.quotas,
-        resetTimes: this.calculateResetTimes(usage.last_daily_reset, usage.last_monthly_reset),
+        resetTimes: this.calculateResetTimes(usage),
       }
     }
 
-    // Check daily quota
-    if (usage.exams_today >= this.quotas.examsPerDay) {
-      const resetTime = this.calculateResetTimes(usage.last_daily_reset, usage.last_monthly_reset)
+    // Check rate limiting (must wait between exams)
+    const rateLimitInfo = this.checkRateLimit(usage.last_exam_generated)
+    if (rateLimitInfo.mustWaitSeconds > 0) {
+      return {
+        canGenerate: false,
+        reason: `Please wait ${rateLimitInfo.mustWaitSeconds} seconds before generating another exam`,
+        usage: {
+          examsToday: usage.exams_today,
+          examsThisWeek: usage.exams_this_week,
+          examsThisMonth: usage.exams_this_month,
+          totalExams: usage.total_exams_generated,
+        },
+        limits: this.quotas,
+        resetTimes: this.calculateResetTimes(usage),
+        rateLimitInfo,
+      }
+    }
+
+    // Check daily burst limit
+    if (usage.exams_today >= this.quotas.dailyBurstLimit) {
+      const resetTime = this.calculateResetTimes(usage)
       const hoursUntilReset = Math.ceil(resetTime.dailyResetIn / 3600000)
 
       return {
         canGenerate: false,
-        reason: `Daily limit reached (${this.quotas.examsPerDay} exams). Resets in ${hoursUntilReset} hours.`,
+        reason: `Daily limit reached (${this.quotas.dailyBurstLimit} exams per day). Resets in ${hoursUntilReset} hours.`,
         usage: {
           examsToday: usage.exams_today,
+          examsThisWeek: usage.exams_this_week,
+          examsThisMonth: usage.exams_this_month,
+          totalExams: usage.total_exams_generated,
+        },
+        limits: this.quotas,
+        resetTimes: resetTime,
+      }
+    }
+
+    // Check weekly quota
+    if (usage.exams_this_week >= this.quotas.examsPerWeek) {
+      const resetTime = this.calculateResetTimes(usage)
+      const daysUntilReset = Math.ceil(resetTime.weeklyResetIn / 86400000)
+
+      return {
+        canGenerate: false,
+        reason: `Weekly limit reached (${this.quotas.examsPerWeek} exams per week). Resets in ${daysUntilReset} days.`,
+        usage: {
+          examsToday: usage.exams_today,
+          examsThisWeek: usage.exams_this_week,
           examsThisMonth: usage.exams_this_month,
           totalExams: usage.total_exams_generated,
         },
@@ -126,7 +187,7 @@ export class UsageTrackingService {
 
     // Check monthly quota
     if (usage.exams_this_month >= this.quotas.examsPerMonth) {
-      const resetTime = this.calculateResetTimes(usage.last_daily_reset, usage.last_monthly_reset)
+      const resetTime = this.calculateResetTimes(usage)
       const daysUntilReset = Math.ceil(resetTime.monthlyResetIn / 86400000)
 
       return {
@@ -134,6 +195,7 @@ export class UsageTrackingService {
         reason: `Monthly limit reached (${this.quotas.examsPerMonth} exams). Resets in ${daysUntilReset} days.`,
         usage: {
           examsToday: usage.exams_today,
+          examsThisWeek: usage.exams_this_week,
           examsThisMonth: usage.exams_this_month,
           totalExams: usage.total_exams_generated,
         },
@@ -147,11 +209,13 @@ export class UsageTrackingService {
       canGenerate: true,
       usage: {
         examsToday: usage.exams_today,
+        examsThisWeek: usage.exams_this_week,
         examsThisMonth: usage.exams_this_month,
         totalExams: usage.total_exams_generated,
       },
       limits: this.quotas,
-      resetTimes: this.calculateResetTimes(usage.last_daily_reset, usage.last_monthly_reset),
+      resetTimes: this.calculateResetTimes(usage),
+      rateLimitInfo,
     }
   }
 
@@ -178,48 +242,82 @@ export class UsageTrackingService {
    */
   getUsageStatus(userId: number): UsageStatus {
     const usage = this.db.getUserUsage(userId)
+    const rateLimitInfo = this.checkRateLimit(usage.last_exam_generated)
 
     return {
       canGenerate: true, // Not checking limits, just showing status
       usage: {
         examsToday: usage.exams_today,
+        examsThisWeek: usage.exams_this_week,
         examsThisMonth: usage.exams_this_month,
         totalExams: usage.total_exams_generated,
       },
       limits: this.quotas,
-      resetTimes: this.calculateResetTimes(usage.last_daily_reset, usage.last_monthly_reset),
+      resetTimes: this.calculateResetTimes(usage),
+      rateLimitInfo,
     }
   }
 
   /**
-   * Calculate time until daily and monthly resets
-   *
-   * @param lastDailyReset - Last daily reset timestamp (ISO string)
-   * @param lastMonthlyReset - Last monthly reset timestamp (ISO string)
-   * @returns Milliseconds until each reset
+   * Check rate limiting between exam generations
    */
-  private calculateResetTimes(
-    lastDailyReset: string,
-    lastMonthlyReset: string
-  ): {
+  private checkRateLimit(lastExamGenerated: string | null): {
+    mustWaitSeconds: number
+    lastExamGenerated: string | null
+  } {
+    if (!lastExamGenerated || this.quotas.rateLimitDelaySeconds === 0) {
+      return {
+        mustWaitSeconds: 0,
+        lastExamGenerated,
+      }
+    }
+
+    const now = Date.now()
+    const lastExamTime = new Date(lastExamGenerated).getTime()
+    const timeSinceLastExam = now - lastExamTime
+    const requiredDelay = this.quotas.rateLimitDelaySeconds * 1000
+
+    const mustWaitSeconds = Math.max(0, Math.ceil((requiredDelay - timeSinceLastExam) / 1000))
+
+    return {
+      mustWaitSeconds,
+      lastExamGenerated,
+    }
+  }
+
+  /**
+   * Calculate time until daily, weekly, and monthly resets
+   */
+  private calculateResetTimes(usage: {
+    last_daily_reset: string
+    last_weekly_reset: string
+    last_monthly_reset: string
+  }): {
     dailyResetIn: number
+    weeklyResetIn: number
     monthlyResetIn: number
   } {
     const now = new Date()
 
     // Calculate next day reset (midnight UTC)
-    const nextDayReset = new Date(lastDailyReset)
+    const nextDayReset = new Date(usage.last_daily_reset)
     nextDayReset.setUTCDate(nextDayReset.getUTCDate() + 1)
     nextDayReset.setUTCHours(0, 0, 0, 0)
 
+    // Calculate next week reset (Monday at midnight UTC)
+    const nextWeekReset = new Date(usage.last_weekly_reset)
+    nextWeekReset.setUTCDate(nextWeekReset.getUTCDate() + (7 - nextWeekReset.getUTCDay() + 1) % 7 || 7)
+    nextWeekReset.setUTCHours(0, 0, 0, 0)
+
     // Calculate next month reset (1st of next month at midnight UTC)
-    const nextMonthReset = new Date(lastMonthlyReset)
+    const nextMonthReset = new Date(usage.last_monthly_reset)
     nextMonthReset.setUTCMonth(nextMonthReset.getUTCMonth() + 1)
     nextMonthReset.setUTCDate(1)
     nextMonthReset.setUTCHours(0, 0, 0, 0)
 
     return {
       dailyResetIn: Math.max(0, nextDayReset.getTime() - now.getTime()),
+      weeklyResetIn: Math.max(0, nextWeekReset.getTime() - now.getTime()),
       monthlyResetIn: Math.max(0, nextMonthReset.getTime() - now.getTime()),
     }
   }

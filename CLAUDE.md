@@ -22,7 +22,7 @@ npm run package      # Create installer/executable
 **Latest Update**: Real authentication system implemented, exam history bug fixed - app ready for deployment.
 
 **Supported Files**: .txt, .docx (PDF extraction disabled)
-**User Quotas**: 10 exams/day, 100/month, 10-100 questions per exam
+**User Quotas**: 10 exams/week, 3/day burst limit, 40/month, 10-100 questions per exam
 
 ## Architecture
 
@@ -50,8 +50,53 @@ npm run package      # Create installer/executable
 
 ```sql
 users: id, email, password_hash, created_at
-user_usage: user_id, exams_today, exams_this_month, resets
+user_usage: user_id, exams_today, exams_this_week, exams_this_month, weekly_reset, last_exam_generated
 exams: id, user_id, title, topic, total_questions, file_path, created_at
+```
+
+## Hybrid Weekly Quota System (November 2025)
+
+### ✅ **Enhanced Usage Quota Implementation**
+
+**Implemented a hybrid weekly + daily burst protection quota system to improve user experience while protecting against API abuse:**
+
+#### **New Quota Structure**
+```typescript
+interface UsageQuotas {
+  examsPerWeek: 10,          // Total weekly allowance
+  dailyBurstLimit: 3,        // Max per day (burst protection)
+  examsPerMonth: 40,         // Monthly limit (down from 100)
+  rateLimitDelaySeconds: 30  // Delay between exam generations
+}
+```
+
+#### **Key Improvements**
+- **Weekly Flexibility**: Users can generate up to 10 exams per week with flexible daily distribution
+- **Burst Protection**: Maximum 3 exams per day to prevent API abuse and quality degradation
+- **Rate Limiting**: 30-second delay between exam generations to protect Groq API
+- **Testing Mode**: `ENABLE_STRESS_TESTING=true` unlocks 700/week, 100/day for development
+
+#### **Technical Implementation**
+- **Database Schema**: Added `exams_this_week`, `last_weekly_reset`, `last_exam_generated` columns
+- **Weekly Reset Logic**: Automatic reset every Monday at 00:00 UTC
+- **Rate Limit Validation**: Backend enforces delays and blocks rapid successive requests
+- **Quality Protection**: Prevents burst requests that could degrade exam quality
+
+#### **User Benefits**
+- **Better UX**: Can generate 5 exams Sunday night for Monday exam, then coast rest of week
+- **Natural Patterns**: Aligns with actual student study behavior (batch study sessions)
+- **Lower Monthly Costs**: 40/month vs 100/month reduces API costs while maintaining usability
+
+#### **Environment Configuration**
+```bash
+# Production quotas
+MAX_EXAMS_PER_WEEK=10
+DAILY_BURST_LIMIT=3
+MAX_EXAMS_PER_MONTH=40
+RATE_LIMIT_DELAY_SECONDS=30
+
+# Development/stress testing
+ENABLE_STRESS_TESTING=true  # Unlocks higher limits
 ```
 
 ## Implementation Patterns
@@ -622,6 +667,12 @@ The authentication system has been fully implemented and is production-ready. Al
 - Usage quotas properly tracked per real user
 - Exam success page automatically saves to history
 - My Exams page displays user's personal exam history
+
+**🔧 Session Persistence Fix (November 2025)**
+- **Issue**: Sessions lost on app restart causing "invalid session" errors
+- **Solution**: Enhanced session tokens with embedded user IDs (format: `session_[userId]_[timestamp]_[randomHex]`)
+- **Database Fallback**: Automatic session restoration from database after app restart
+- **Result**: Users stay logged in across app restarts, exam history accessible immediately
 
 The authentication system is now complete and ready for production deployment. Users can register, login, generate exams, and view their personal exam history seamlessly.
 

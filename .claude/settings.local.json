@@ -4,7 +4,9 @@
     "allow": [
       "Read(//c/Users/NITRO V15/Pictures/Screenshots/**)",
       "Read(//c/Users/NITRO V15/Downloads/**)",
-      "Read(//c/Users/NITRO V15/Documents/Development/Projects/Active/qreate/**)"
+      "Read(//c/Users/NITRO V15/Documents/Development/Projects/Active/qreate/**)",
+      "mcp__filesystem__directory_tree",
+      "mcp__filesystem__read_multiple_files"
     ]
   },
   "enableAllProjectMcpServers": true,

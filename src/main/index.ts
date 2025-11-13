@@ -464,7 +464,7 @@ function registerIpcHandlers(): void {
         }
       }
 
-      // Check user quotas first
+      // Check user quotas first (includes rate limiting delay check)
       const usageCheck = usageTrackingService.checkUsage(userId, config.totalQuestions)
       if (!usageCheck.canGenerate) {
         console.warn('[UsageTracking] Request blocked:', usageCheck.reason)
@@ -472,7 +472,14 @@ function registerIpcHandlers(): void {
           success: false,
           error: usageCheck.reason,
           usageStatus: usageCheck,
+          rateLimitInfo: usageCheck.rateLimitInfo,
         }
+      }
+
+      // If rate limiting is enabled, wait the required delay
+      if (usageCheck.rateLimitInfo && usageCheck.rateLimitInfo.mustWaitSeconds > 0) {
+        console.log(`[RateLimit] Waiting ${usageCheck.rateLimitInfo.mustWaitSeconds} seconds before generation...`)
+        await new Promise(resolve => setTimeout(resolve, usageCheck.rateLimitInfo!.mustWaitSeconds * 1000))
       }
 
       // Check global rate limits
