@@ -1,9 +1,45 @@
-# Google OAuth Setup Guide
+# ⚠️ DEPRECATED: Google OAuth Setup Guide
 
-**Time required:** 5-10 minutes
-**Difficulty:** Easy (just follow the steps with screenshots)
+**STATUS:** 🗂️ ARCHIVED - Feature replaced with local PDF generation  
+**Replacement Date:** Phase 4 completion (November 2025)  
+**Reason:** Simplified UX based on user feedback - local PDF generation preferred over Google Drive integration
 
-## Why do we need this?
+---
+
+## 🚫 Why This Feature Was Removed
+
+**User Feedback:** *"May I ask why the need for Google Drive?"*
+
+**Product Decision:** Replace Google Drive integration with local PDF generation for better UX:
+
+✅ **Local PDF Benefits:**
+- **No OAuth setup required** - eliminates user configuration complexity
+- **Works completely offline** - no internet connection needed
+- **Instant PDF generation** - uses Electron's built-in `printToPDF()`
+- **No external dependencies** - more reliable, no service outages
+- **Simpler user flow** - download PDF directly, no account linking
+
+❌ **Google Drive Drawbacks:**
+- Required Google Cloud Console setup
+- Complex OAuth flow for users
+- Dependency on Google services
+- Additional failure points
+- User preference for local files
+
+## 📁 Current Implementation
+
+PDFs are now generated locally using `src/main/services/PDFGenerator.ts` and saved to the `Projects/` directory.
+
+---
+
+## 📚 Original Documentation (Preserved for Reference)
+
+*This setup guide is preserved in case Google Drive integration is reconsidered in the future.*
+
+**Original Time required:** 5-10 minutes
+**Original Difficulty:** Easy (just follow the steps with screenshots)
+
+### Original Purpose
 
 To allow Qreate to create Google Docs and export PDFs to users' Google Drive, we need to set up OAuth 2.0 credentials. This is a **one-time developer setup** - end users won't need to do this.
 

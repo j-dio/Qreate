@@ -493,7 +493,21 @@ function registerIpcHandlers(): void {
       }
 
       try {
-        const examContent = await groqProvider.generateExam(config, sourceText)
+        const rawExamContent = await groqProvider.generateExam(config, sourceText)
+
+        // Post-processing safety net: Clean any literal instructions
+        console.log('[IPC] Applying post-processing cleanup...')
+        const qualityValidator = new ExamQualityValidator(sourceText)
+        const literalCheck = qualityValidator.detectLiteralInstructions(rawExamContent)
+        
+        let examContent = rawExamContent
+        if (literalCheck.found) {
+          console.log(`[IPC] Found ${literalCheck.patterns.length} literal instructions, cleaning...`, literalCheck.patterns)
+          examContent = qualityValidator.cleanLiteralInstructions(rawExamContent)
+          console.log('[IPC] Post-processing cleanup completed')
+        } else {
+          console.log('[IPC] No literal instructions found, content is clean')
+        }
 
         // Parse the exam content into structured format
         console.log('[IPC] Parsing generated exam content...')
@@ -514,13 +528,8 @@ function registerIpcHandlers(): void {
           },
         }
 
-        // Perform quality validation
+        // Perform comprehensive quality validation
         console.log('[IPC] Performing quality validation...')
-        const qualityValidator = new ExamQualityValidator(sourceText, {
-          minimumQualityScore: 0.7, // 70% quality threshold
-          retryOnLowQuality: false, // Don't auto-retry in main process
-        })
-
         const validationResult = await qualityValidator.validateExam(exam)
 
         console.log('[IPC] Quality validation complete:', {

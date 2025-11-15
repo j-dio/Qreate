@@ -238,7 +238,7 @@ export class GroqProvider {
    * 4. Concrete examples (show exact format expected)
    * 5. Output format specification
    */
-  private buildExamPrompt(config: ExamGenerationConfig, sourceText: string): string {
+  public buildExamPrompt(config: ExamGenerationConfig, sourceText: string): string {
     // Get selected question types with counts
     const selectedTypes = Object.entries(config.questionTypes)
       .filter(([_, count]) => count && count > 0)
@@ -488,5 +488,49 @@ ${truncatedSource}
 - ONLY output the actual exam content and answer key
 
 **OUTPUT:**`
+  }
+
+  /**
+   * Generate exam using custom prompt (for optimization testing)
+   *
+   * Used by PromptOptimizer to test different prompt strategies.
+   *
+   * @param prompt - Custom prompt to test
+   * @param timeoutMs - Optional timeout in milliseconds
+   * @returns Promise with generated exam content
+   */
+  async generateExamWithPrompt(prompt: string, _timeoutMs?: number): Promise<string> {
+    try {
+      console.log('[Groq] Generating exam with custom prompt')
+
+      const completion = await this.client.chat.completions.create({
+        messages: [
+          {
+            role: 'system',
+            content: 'You are an expert exam creator. Generate ONLY the exam content with no introductory text, explanations, or suggestions.',
+          },
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+        model: this.model,
+        max_tokens: GROQ_CONFIG.maxTokens,
+        temperature: GROQ_CONFIG.temperature,
+        top_p: GROQ_CONFIG.topP,
+      })
+
+      const examContent = completion.choices[0]?.message?.content
+
+      if (!examContent || examContent.trim().length === 0) {
+        throw new Error('Groq returned empty response')
+      }
+
+      console.log('[Groq] Exam generated successfully with custom prompt')
+      return examContent
+    } catch (error: any) {
+      console.error('[Groq] Custom prompt generation failed:', error.message)
+      throw new Error(`Failed to generate exam with custom prompt: ${error.message}`)
+    }
   }
 }

@@ -1,4 +1,22 @@
-# Bug Report: PDF Text Extraction Failure
+# ✅ RESOLVED: PDF Text Extraction (Intentionally Disabled)
+
+**STATUS:** 🗂️ ARCHIVED - PDF support intentionally disabled for reliability  
+**Resolution Date:** Phase 4 completion (November 2025)  
+**Solution:** Application now supports .txt and .docx files only for better user experience
+
+---
+
+## 📋 Resolution Summary
+
+**Original Issue:** PDF text extraction was failing during file processing  
+**Root Cause:** Complex PDF parsing with multiple technical challenges  
+**Final Decision:** Disable PDF support, focus on reliable .txt/.docx processing
+
+**Current Supported Files:** `.txt` and `.docx` only (as shown in CLAUDE.md)
+
+---
+
+## 📚 Original Bug Report (Preserved for Reference)
 
 **Date:** October 30, 2025
 **Issue:** Exam generation fails during PDF text extraction phase

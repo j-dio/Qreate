@@ -368,6 +368,12 @@ export class ExamQualityValidator {
   private performQualityChecks(question: GeneratedQuestion): string[] {
     const issues: string[] = []
     
+    // Check for literal instructions (critical quality issue)
+    const literalInstructions = this.detectLiteralInstructions(question.question)
+    if (literalInstructions.found) {
+      issues.push(`Contains literal instructions: ${literalInstructions.patterns.join(', ')}`)
+    }
+    
     // Check question length
     if (question.question.length < 10) {
       issues.push('Question too short')
@@ -524,6 +530,120 @@ export class ExamQualityValidator {
       metrics.difficultyScore * weights.difficulty +
       metrics.coverageScore * weights.coverage
     )
+  }
+
+  /**
+   * Detect literal instructions in text
+   * 
+   * @param text - Text to check for literal instruction patterns
+   * @returns Detection result with found patterns
+   */
+  public detectLiteralInstructions(text: string): {
+    found: boolean;
+    patterns: string[];
+    cleanedText?: string;
+  } {
+    const literalPatterns = [
+      // Bracket placeholders
+      /\[Continue with.*?\]/gi,
+      /\[Generate.*?\]/gi,
+      /\[Question text here.*?\]/gi,
+      /\[.*?questions?\]/gi,
+      
+      // Direct instruction phrases
+      /Continue for all requested/gi,
+      /Generate all \d+ questions/gi,
+      /Continue with questions? \d+/gi,
+      /Continue in same format/gi,
+      /Follow this pattern/gi,
+      /Repeat for all/gi,
+      
+      // Formatting instructions
+      /Use this format/gi,
+      /Format as follows/gi,
+      /Follow the structure/gi,
+      /Continue the pattern/gi,
+      
+      // Ellipsis patterns that suggest continuation
+      /\[\.\.\.continues?\]/gi,
+      /\[more questions?\]/gi,
+      /\[rest of.*?\]/gi,
+    ]
+    
+    const foundPatterns: string[] = []
+    
+    for (const pattern of literalPatterns) {
+      const matches = text.match(pattern)
+      if (matches) {
+        foundPatterns.push(...matches)
+      }
+    }
+    
+    return {
+      found: foundPatterns.length > 0,
+      patterns: foundPatterns,
+      cleanedText: foundPatterns.length > 0 ? this.cleanLiteralInstructions(text) : undefined,
+    }
+  }
+  
+  /**
+   * Clean literal instructions from exam content
+   * 
+   * @param examContent - Raw exam content from AI generation
+   * @returns Cleaned exam content with literal instructions removed
+   */
+  public cleanLiteralInstructions(examContent: string): string {
+    let cleaned = examContent
+    
+    // Remove bracket placeholders and instruction text
+    const cleaningPatterns = [
+      // Bracket placeholders
+      /\[Continue with.*?\]/gi,
+      /\[Generate.*?\]/gi,
+      /\[Question text here.*?\]/gi,
+      /\[.*?questions?\]/gi,
+      /\[\.\.\.continues?\]/gi,
+      /\[more questions?\]/gi,
+      /\[rest of.*?\]/gi,
+      
+      // Direct instruction phrases (entire lines)
+      /Continue for all requested.*$/gmi,
+      /Generate all \d+ questions.*$/gmi,
+      /Continue with questions? \d+.*$/gmi,
+      /Continue in same format.*$/gmi,
+      /Follow this pattern.*$/gmi,
+      /Repeat for all.*$/gmi,
+      /Use this format.*$/gmi,
+      /Format as follows.*$/gmi,
+      /Follow the structure.*$/gmi,
+      /Continue the pattern.*$/gmi,
+      
+      // Lines that are just ellipsis or dashes indicating continuation
+      /^\.\.\.+.*$/gmi,
+      /^-+.*continues?.*$/gmi,
+      /^\*.*continues?.*$/gmi,
+      
+      // Remove empty parentheses or brackets left behind
+      /\(\s*\)/g,
+      /\[\s*\]/g,
+      /\{\s*\}/g,
+    ]
+    
+    // Apply all cleaning patterns
+    for (const pattern of cleaningPatterns) {
+      cleaned = cleaned.replace(pattern, '')
+    }
+    
+    // Clean up multiple consecutive newlines
+    cleaned = cleaned.replace(/\n\s*\n\s*\n/g, '\n\n')
+    
+    // Remove trailing whitespace from lines
+    cleaned = cleaned.replace(/[ \t]+$/gm, '')
+    
+    // Ensure proper spacing around question numbers
+    cleaned = cleaned.replace(/(\d+)\.\s*\n/g, '$1. ')
+    
+    return cleaned.trim()
   }
 
   /**
