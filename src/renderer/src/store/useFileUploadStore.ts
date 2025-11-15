@@ -41,6 +41,8 @@ export interface UploadedFile {
   size: number
   type: string
   path?: string // Added for Electron file access
+  isDragAndDrop?: boolean // Marks files from drag-and-drop (no path available)
+  originalFile?: File // Store original File object for drag-and-drop files
   status: 'pending' | 'validating' | 'valid' | 'invalid' | 'extracting' | 'ready'
   error?: string
   extractedText?: string
@@ -122,6 +124,8 @@ export const useFileUploadStore = create<FileUploadState>((set, get) => ({
         size: file.size,
         type: file.type,
         path: (file as any).path, // Preserve path from Electron file dialog
+        isDragAndDrop: (file as any).isDragAndDrop, // Preserve drag-and-drop marker
+        originalFile: (file as any)._originalFile, // Preserve original File object for drag-and-drop
         status: 'pending',
       }))
 
@@ -131,6 +135,8 @@ export const useFileUploadStore = create<FileUploadState>((set, get) => ({
           name: f.name,
           hasPath: !!f.path,
           path: f.path,
+          isDragAndDrop: f.isDragAndDrop,
+          hasOriginalFile: !!f.originalFile,
         }))
       )
 

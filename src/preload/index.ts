@@ -46,6 +46,10 @@ const electronAPI = {
     return ipcRenderer.invoke('extract-file-text', filePath)
   },
 
+  extractFileTextFromBuffer: (fileData: { name: string, buffer: Uint8Array, type: string }) => {
+    return ipcRenderer.invoke('extract-file-text-from-buffer', fileData)
+  },
+
   // Google Drive operations
   googleDrive: {
     checkAuth: () => {

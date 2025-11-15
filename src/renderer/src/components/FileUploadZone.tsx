@@ -74,52 +74,6 @@ export function FileUploadZone() {
     })
   }, [uploadedFiles, updateFileStatus])
 
-  /**
-   * Handle file selection (from drag-drop or file browser)
-   *
-   * Process:
-   * 1. Clear previous messages
-   * 2. Validate files
-   * 3. If valid, add to store
-   * 4. If invalid, show error
-   *
-   * useCallback optimization:
-   * - Prevents unnecessary re-renders
-   * - Memoizes the function so it's not recreated on every render
-   * - Only recreates if dependencies change
-   */
-  const handleFiles = useCallback(
-    (files: FileList | null) => {
-      // Clear previous messages
-      setValidationError(null)
-      setSuccessMessage(null)
-
-      if (!files || files.length === 0) return
-
-      // Convert FileList to Array for easier handling
-      const fileArray = Array.from(files)
-
-      // Validate files
-      const validation = validateFiles(fileArray, uploadedFiles.length, totalSize)
-
-      if (!validation.isValid) {
-        // Show error message
-        setValidationError(validation.error || 'Invalid files')
-        return
-      }
-
-      // Files are valid, add them to store
-      addFiles(fileArray)
-
-      // Show success message
-      const fileWord = fileArray.length === 1 ? 'file' : 'files'
-      setSuccessMessage(`Successfully added ${fileArray.length} ${fileWord}`)
-
-      // Clear success message after 3 seconds
-      setTimeout(() => setSuccessMessage(null), 3000)
-    },
-    [uploadedFiles.length, totalSize, addFiles]
-  )
 
   /**
    * Handle drag over event
@@ -176,18 +130,69 @@ export function FileUploadZone() {
    * Handle drop event
    *
    * Processes the dropped files
+   * 
+   * IMPORTANT FIX: Standard drag-and-drop doesn't provide file paths due to browser security.
+   * We need to get the paths through Electron's file system access for proper file processing.
    */
   const handleDrop = useCallback(
-    (e: React.DragEvent<HTMLDivElement>) => {
+    async (e: React.DragEvent<HTMLDivElement>) => {
       e.preventDefault()
       e.stopPropagation()
       setIsDragging(false)
 
+      // Clear previous messages
+      setValidationError(null)
+      setSuccessMessage(null)
+
       // Get files from the drag event
-      const files = e.dataTransfer.files
-      handleFiles(files)
+      const droppedFiles = Array.from(e.dataTransfer.files)
+      
+      if (droppedFiles.length === 0) return
+
+      try {
+        // For drag-and-drop, we need to handle files differently since they don't have file paths
+        // We'll store the File object directly and handle extraction differently in the generation process
+        const filesWithMetadata = droppedFiles.map((file) => {
+          // Create a File object that marks it as a drag-and-drop file
+          const fileWithMetadata = {
+            ...file,
+            name: file.name,
+            size: file.size,
+            type: file.type,
+            path: undefined, // No path available for drag-and-drop files
+            lastModified: file.lastModified,
+            // Mark this as a drag-and-drop file for special handling
+            isDragAndDrop: true,
+            // Store the actual File object for buffer extraction
+            _originalFile: file
+          } as File & { path?: string; isDragAndDrop: boolean; _originalFile: File }
+
+          return fileWithMetadata
+        })
+
+        // Validate files
+        const validation = validateFiles(filesWithMetadata, uploadedFiles.length, totalSize)
+
+        if (!validation.isValid) {
+          setValidationError(validation.error || 'Invalid files')
+          return
+        }
+
+        // Files are valid, add them to store
+        addFiles(filesWithMetadata)
+
+        // Show success message
+        const fileWord = filesWithMetadata.length === 1 ? 'file' : 'files'
+        setSuccessMessage(`Successfully added ${filesWithMetadata.length} ${fileWord}`)
+
+        // Clear success message after 3 seconds
+        setTimeout(() => setSuccessMessage(null), 3000)
+      } catch (error) {
+        console.error('Drop handling error:', error)
+        setValidationError('Failed to process dropped files. Please try using the Browse Files button instead.')
+      }
     },
-    [setIsDragging, handleFiles]
+    [setIsDragging, uploadedFiles.length, totalSize, addFiles]
   )
 
   /**

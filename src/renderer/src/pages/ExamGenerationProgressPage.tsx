@@ -19,7 +19,7 @@
  * - Cancel option (future)
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Sparkles, FileText, CheckCircle, XCircle, Loader2, AlertCircle } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
@@ -64,15 +64,7 @@ export function ExamGenerationProgressPage() {
     // No need to check API keys with Groq backend - it's managed server-side
   }, [user, uploadedFiles, totalQuestions, navigate])
 
-  // Start generation automatically on mount
-  useEffect(() => {
-    if (!hasStarted && status === 'idle') {
-      setHasStarted(true)
-      handleStartGeneration()
-    }
-  }, [hasStarted, status])
-
-  const handleStartGeneration = async () => {
+  const handleStartGeneration = useCallback(async () => {
     try {
       // Start generation
       startGeneration()
@@ -100,12 +92,48 @@ export function ExamGenerationProgressPage() {
           stage: 'processing_files',
         })
 
-        // Extract text from file
-        const result = await window.electron.extractFileText(file.path!)
-        if (result.success && result.text) {
-          fileTexts.push(result.text)
+        // Extract text from file - handle both path-based and drag-and-drop files
+        let result;
+        
+        if (file.path && !file.isDragAndDrop) {
+          // File has a path (from file dialog) - use normal extraction
+          console.log(`[ExamGeneration] Using path extraction for: ${file.name} (path: ${file.path})`)
+          result = await window.electron.extractFileText(file.path)
+        } else if (file.isDragAndDrop && file.originalFile) {
+          // Drag-and-drop file - extract via buffer
+          console.log(`[ExamGeneration] Using buffer extraction for: ${file.name}`)
+          const originalFile = file.originalFile
+          
+          // Convert File to ArrayBuffer then to Uint8Array
+          const arrayBuffer = await originalFile.arrayBuffer()
+          const uint8Array = new Uint8Array(arrayBuffer)
+          
+          // Extract text using buffer method
+          result = await window.electron.extractFileTextFromBuffer({
+            name: file.name,
+            buffer: uint8Array,
+            type: file.type
+          })
         } else {
-          throw new Error(`Failed to extract text from ${file.name}: ${result.error}`)
+          const errorMsg = `File ${file.name} has no accessible path or content. Path: ${file.path}, isDragAndDrop: ${file.isDragAndDrop}, hasOriginalFile: ${!!file.originalFile}`
+          console.error('[ExamGeneration] File access error:', errorMsg)
+          throw new Error(errorMsg)
+        }
+        
+        console.log(`[ExamGeneration] Extraction result for ${file.name}:`, {
+          success: result?.success,
+          hasText: !!(result?.text),
+          textLength: result?.text?.length || 0,
+          error: result?.error
+        })
+        
+        if (result && result.success && result.text) {
+          fileTexts.push(result.text)
+          console.log(`[ExamGeneration] Successfully extracted ${result.text.length} characters from ${file.name}`)
+        } else {
+          const errorMsg = result?.error || 'Unknown error during text extraction'
+          console.error(`[ExamGeneration] Failed to extract text from ${file.name}:`, errorMsg)
+          throw new Error(`Failed to extract text from ${file.name}: ${errorMsg}`)
         }
       }
 
@@ -161,7 +189,26 @@ export function ExamGenerationProgressPage() {
         maxRetries: 3,
       })
     }
-  }
+  }, [
+    startGeneration,
+    updateProgress,
+    uploadedFiles,
+    totalQuestions,
+    setGeneratedExam,
+    navigate,
+    questionTypes,
+    difficultyDistribution,
+    user,
+    setError
+  ])
+
+  // Start generation automatically on mount
+  useEffect(() => {
+    if (!hasStarted && status === 'idle') {
+      setHasStarted(true)
+      handleStartGeneration()
+    }
+  }, [hasStarted, status, handleStartGeneration])
 
   const handleRetry = () => {
     resetGeneration()

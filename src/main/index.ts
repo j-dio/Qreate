@@ -18,6 +18,7 @@ dotenv.config({ path: '.env.local' })
 import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
 import path from 'path'
 import * as fs from 'fs/promises'
+import { existsSync } from 'fs'
 import { FileTextExtractor } from './services/FileTextExtractor'
 import { GoogleDriveService } from './services/GoogleDriveService'
 import { PDFGenerator } from './services/PDFGenerator'
@@ -205,6 +206,76 @@ function registerIpcHandlers(): void {
       error: result.error,
     })
     return result
+  })
+
+  /**
+   * Extract text from File object (for drag-and-drop files without paths)
+   * 
+   * This handles the case where files are dragged from external sources
+   * and don't have accessible file paths due to browser security restrictions.
+   * 
+   * @param fileData - File data (name, content buffer, type)
+   * @returns Text extraction result
+   */
+  ipcMain.handle('extract-file-text-from-buffer', async (_, fileData: { name: string, buffer: Uint8Array, type: string }) => {
+    console.log('[IPC] Extract text from buffer for:', fileData.name, 'type:', fileData.type, 'buffer size:', fileData.buffer?.length)
+    
+    try {
+      // Validate input data
+      if (!fileData.name) {
+        throw new Error('File name is required')
+      }
+      if (!fileData.buffer || fileData.buffer.length === 0) {
+        throw new Error('File buffer is empty or missing')
+      }
+      
+      // Save buffer to temporary file for processing
+      const tmpPath = path.join(process.cwd(), 'temp', `${Date.now()}-${fileData.name}`)
+      console.log('[IPC] Creating temporary file at:', tmpPath)
+      
+      // Ensure temp directory exists
+      const tempDir = path.dirname(tmpPath)
+      if (!existsSync(tempDir)) {
+        console.log('[IPC] Creating temp directory:', tempDir)
+        await fs.mkdir(tempDir, { recursive: true })
+      }
+      
+      // Write buffer to temporary file
+      const fileBuffer = Buffer.from(fileData.buffer)
+      console.log('[IPC] Writing buffer to file, converted buffer size:', fileBuffer.length)
+      await fs.writeFile(tmpPath, fileBuffer)
+      
+      // Verify file was written
+      const stats = await fs.stat(tmpPath)
+      console.log('[IPC] Temp file created successfully, size:', stats.size)
+      
+      // Extract text using the existing service
+      console.log('[IPC] Starting text extraction...')
+      const result = await fileTextExtractor.extractText(tmpPath)
+      console.log('[IPC] Text extraction completed:', result.success ? 'SUCCESS' : 'FAILED')
+      
+      // Clean up temporary file
+      try {
+        await fs.unlink(tmpPath)
+        console.log('[IPC] Temp file cleaned up successfully')
+      } catch (cleanupError) {
+        console.warn('[IPC] Failed to cleanup temp file:', cleanupError)
+      }
+      
+      console.log('[IPC] Buffer extraction result:', {
+        success: result.success,
+        textLength: result.text?.length || 0,
+        error: result.error,
+      })
+      
+      return result
+    } catch (error) {
+      console.error('[IPC] Buffer extraction failed:', error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to extract text from file'
+      }
+    }
   })
 
   /**
