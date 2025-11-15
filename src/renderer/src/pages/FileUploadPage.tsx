@@ -28,6 +28,7 @@
  * - Easy navigation back to home
  */
 
+import { useEffect } from 'react'
 import { ArrowLeft, ArrowRight, Info } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { FileUploadZone } from '../components/FileUploadZone'
@@ -35,10 +36,25 @@ import { FileList } from '../components/FileList'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent } from '../components/ui/Card'
 import { useFileUploadStore } from '../store/useFileUploadStore'
+import { useExamConfigStore } from '../store/useExamConfigStore'
+import { useExamGenerationStore } from '../store/useExamGenerationStore'
 
 export function FileUploadPage() {
   const navigate = useNavigate()
   const uploadedFiles = useFileUploadStore(state => state.uploadedFiles)
+
+  // Reset all workflow state when entering exam creation
+  useEffect(() => {
+    console.log('[FileUploadPage] Resetting workflow state for new exam creation')
+    
+    const clearAllFiles = useFileUploadStore.getState().clearAllFiles
+    const resetAll = useExamConfigStore.getState().resetAll
+    const reset = useExamGenerationStore.getState().reset
+    
+    clearAllFiles()
+    resetAll()
+    reset()
+  }, [])
 
   /**
    * Check if user can proceed to next step

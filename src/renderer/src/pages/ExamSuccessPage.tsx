@@ -32,6 +32,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { useFileUploadStore } from '../store/useFileUploadStore'
 import { useExamConfigStore } from '../store/useExamConfigStore'
+import { useExamGenerationStore } from '../store/useExamGenerationStore'
 import { useAppStore } from '../store/useAppStore'
 
 /**
@@ -171,7 +172,16 @@ export function ExamSuccessPage() {
    * Create another exam
    */
   const handleCreateAnother = () => {
-    navigate('/create-exam/upload')
+    // Reset all workflow stores before navigating to new exam creation
+    const clearAllFiles = useFileUploadStore.getState().clearAllFiles
+    const resetAll = useExamConfigStore.getState().resetAll
+    const reset = useExamGenerationStore.getState().reset
+    
+    clearAllFiles()
+    resetAll()
+    reset()
+    
+    navigate('/create-exam')
   }
 
   if (!state?.exam) {
