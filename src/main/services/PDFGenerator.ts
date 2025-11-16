@@ -177,15 +177,13 @@ export class PDFGenerator {
       page-break-before: always;
     }
     .footer {
-      position: fixed;
-      bottom: 20px;
-      left: 20px;
-      right: 20px;
+      margin-top: 30px;
       text-align: center;
       font-size: 10px;
       color: #666;
       border-top: 1px solid #ccc;
       padding-top: 10px;
+      page-break-inside: avoid;
     }
   </style>
 </head>
@@ -315,11 +313,13 @@ ${content}
     }
 
     .footer {
-      position: fixed;
-      bottom: 20px;
-      right: 40px;
+      margin-top: 30px;
+      text-align: center;
       font-size: 9pt;
       color: #999;
+      border-top: 1px solid #ccc;
+      padding-top: 10px;
+      page-break-inside: avoid;
     }
   </style>
 </head>

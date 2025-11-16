@@ -9,7 +9,6 @@
     "module": "ESNext",                          // Use modern ES modules
     "moduleResolution": "bundler",               // How to find imported modules
     "resolveJsonModule": true,                   // Allow importing JSON files
-    "baseUrl": ".",                              // Base directory for imports
     "paths": {                                   // Path aliases (shortcuts)
       "@/*": ["./src/*"],                        // Use @/ instead of ./src/
       "@main/*": ["./src/main/*"],
