@@ -18,7 +18,7 @@
  * - Empty state for new users
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { 
   FileText, 
@@ -70,10 +70,40 @@ export function MyExamsPage() {
   const [sortBy, setSortBy] = useState<'date' | 'title' | 'questions'>('date')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
 
+  /**
+   * Load exam history from backend
+   */
+  const loadExamHistory = useCallback(async () => {
+    if (!sessionToken) {
+      setError('Not authenticated')
+      setIsLoading(false)
+      return
+    }
+
+    try {
+      setIsLoading(true)
+      setError(null)
+
+      const response = await window.electron.getExamHistory(sessionToken) as ExamHistoryResponse
+
+      if (response.success && response.exams) {
+        setExams(response.exams)
+        console.log('Loaded', response.exams.length, 'exam records')
+      } else {
+        setError(response.error || 'Failed to load exam history')
+      }
+    } catch (err) {
+      setError('Failed to load exam history')
+      console.error('Load exam history error:', err)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [sessionToken])
+
   // Load exam history on mount
   useEffect(() => {
     loadExamHistory()
-  }, [sessionToken])
+  }, [loadExamHistory])
 
   // Filter and sort exams when search term or sort options change
   useEffect(() => {
@@ -109,36 +139,6 @@ export function MyExamsPage() {
 
     setFilteredExams(filtered)
   }, [exams, searchTerm, sortBy, sortOrder])
-
-  /**
-   * Load exam history from backend
-   */
-  const loadExamHistory = async () => {
-    if (!sessionToken) {
-      setError('Not authenticated')
-      setIsLoading(false)
-      return
-    }
-
-    try {
-      setIsLoading(true)
-      setError(null)
-
-      const response = await window.electron.getExamHistory(sessionToken) as ExamHistoryResponse
-
-      if (response.success && response.exams) {
-        setExams(response.exams)
-        console.log('Loaded', response.exams.length, 'exam records')
-      } else {
-        setError(response.error || 'Failed to load exam history')
-      }
-    } catch (err) {
-      setError('Failed to load exam history')
-      console.error('Load exam history error:', err)
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
   /**
    * Format date for display
