@@ -140,7 +140,8 @@ const FEW_SHOT_EXAMPLES = {
 
   essay: `Essay:
 1. Discuss the process of cellular respiration, including the three main stages and their locations within the cell.
-   Answer: [Detailed essay answer about glycolysis, Krebs cycle, and electron transport chain]
+   Answer: [Detailed essay answer about glycolysis, Krebs cycle, and electr
+   \on transport chain]
 
 2. Explain how natural selection drives evolutionary change in populations.
    Answer: [Detailed essay answer about variation, inheritance, selection pressures, and adaptation]`

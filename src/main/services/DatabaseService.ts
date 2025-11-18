@@ -103,7 +103,7 @@ export class DatabaseService {
         ALTER TABLE users ADD COLUMN name TEXT NOT NULL DEFAULT ''
       `)
       console.log('[Database] Added name column to users table')
-    } catch (error) {
+    } catch {
       // Column already exists or other error - this is expected for new installations
       // SQLite will throw "duplicate column name" error if column exists
     }
@@ -128,21 +128,21 @@ export class DatabaseService {
     try {
       this.db.exec(`ALTER TABLE user_usage ADD COLUMN exams_this_week INTEGER NOT NULL DEFAULT 0`)
       console.log('[Database] Added exams_this_week column to user_usage table')
-    } catch (error) {
+    } catch {
       // Column already exists
     }
 
     try {
       this.db.exec(`ALTER TABLE user_usage ADD COLUMN last_weekly_reset TEXT NOT NULL DEFAULT (datetime('now'))`)
       console.log('[Database] Added last_weekly_reset column to user_usage table')
-    } catch (error) {
+    } catch {
       // Column already exists
     }
 
     try {
       this.db.exec(`ALTER TABLE user_usage ADD COLUMN last_exam_generated TEXT`)
       console.log('[Database] Added last_exam_generated column to user_usage table')
-    } catch (error) {
+    } catch {
       // Column already exists
     }
 
