@@ -132,6 +132,12 @@ const FEW_SHOT_EXAMPLES = {
 2. During photosynthesis, plants convert _______ and water into glucose using light energy.
    Answer: carbon dioxide`,
 
+   matchingType: `Matching Type:
+   1) Nucleus         A) Protein synthesis
+   2) Ribosome        B) Genetic information storage
+   3) Chloroplast     C) Photosynthesis
+   4) Lysosome        D) Waste breakdown`,
+
   essay: `Essay:
 1. Discuss the process of cellular respiration, including the three main stages and their locations within the cell.
    Answer: [Detailed essay answer about glycolysis, Krebs cycle, and electron transport chain]
