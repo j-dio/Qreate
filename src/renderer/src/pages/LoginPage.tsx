@@ -78,7 +78,7 @@ export function LoginPage() {
       } else {
         setErrors({ general: result.error || 'Login failed. Please check your credentials.' })
       }
-    } catch (error) {
+    } catch {
       setErrors({ general: 'Login failed. Please try again.' })
     } finally {
       setIsLoading(false)
