@@ -127,7 +127,7 @@ export function SignupPage() {
       } else {
         setErrors({ general: result.error || 'Registration failed. Please try again.' })
       }
-    } catch (error) {
+    } catch {
       setErrors({ general: 'Registration failed. Please try again.' })
     } finally {
       setIsLoading(false)
