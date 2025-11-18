@@ -45,7 +45,7 @@ export function ReviewConfirmationPage() {
           connected: result.success,
           message: result.success ? 'Connected to Groq AI' : result.message
         })
-      } catch (error) {
+      } catch {
         setGroqStatus({
           connected: false,
           message: 'Failed to connect to Groq backend'
