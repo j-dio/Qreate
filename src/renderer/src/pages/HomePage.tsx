@@ -10,49 +10,126 @@
  * - Usage quota display (Groq backend)
  */
 
-import { Plus, FileText, Clock, CheckCircle2, Zap } from 'lucide-react'
+import {
+  Plus,
+  FileText,
+  Clock,
+  CheckCircle2,
+  Zap,
+  Calendar,
+  Hash,
+  ExternalLink,
+} from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAppStore } from '../store/useAppStore'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 
 interface UsageStatus {
   success: boolean
   canGenerate: boolean
   usage: {
     examsToday: number
+    examsThisWeek: number
     examsThisMonth: number
     totalExams: number
   }
   limits: {
     examsPerDay: number
+    examsPerWeek: number
     examsPerMonth: number
   }
   resetTimes: {
     dailyResetIn: number
+    weeklyResetIn: number
     monthlyResetIn: number
   }
 }
 
+interface ExamRecord {
+  id: number
+  user_id: number
+  title: string
+  topic: string
+  total_questions: number
+  file_path: string
+  created_at: string
+}
+
 export function HomePage() {
   const navigate = useNavigate()
-  const projects = useAppStore(state => state.projects)
   const user = useAppStore(state => state.user)
+  const sessionToken = useAppStore(state => state.sessionToken)
   const [usageStatus, setUsageStatus] = useState<UsageStatus | null>(null)
+  const [recentExams, setRecentExams] = useState<ExamRecord[]>([])
+  const [examStats, setExamStats] = useState({
+    total: 0,
+    thisWeek: 0,
+    thisMonth: 0,
+  })
+  const [isLoadingExams, setIsLoadingExams] = useState(true)
 
-  // Calculate statistics
-  const stats = {
-    total: projects.length,
-    completed: projects.filter(p => p.status === 'completed').length,
-    inProgress: projects.filter(p => p.status === 'processing').length,
-  }
+  // Load exam history and calculate real statistics
+  const loadExamHistory = useCallback(async () => {
+    if (!sessionToken || !user) {
+      setIsLoadingExams(false)
+      return
+    }
 
-  // Fetch usage status on mount
+    try {
+      setIsLoadingExams(true)
+      
+      // Get ALL exams for statistics (no limit)
+      const allExamsResponse = await window.electron.getExamHistory(sessionToken)
+      // Get recent exams for display (limit 10)
+      const recentExamsResponse = await window.electron.getExamHistory(sessionToken, 10)
+
+      if (allExamsResponse.success && allExamsResponse.exams && recentExamsResponse.success && recentExamsResponse.exams) {
+        setRecentExams(recentExamsResponse.exams)
+
+        // Calculate statistics using ALL exams
+        const now = new Date()
+        
+        // Get start of current week (Monday)
+        const startOfWeek = new Date(now)
+        const dayOfWeek = now.getDay() // 0 = Sunday, 1 = Monday, etc.
+        const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1 // Convert Sunday = 0 to 6 days from Monday
+        startOfWeek.setDate(now.getDate() - daysFromMonday)
+        startOfWeek.setHours(0, 0, 0, 0)
+        
+        // Get start of current month
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+        startOfMonth.setHours(0, 0, 0, 0)
+
+        const thisWeekExams = allExamsResponse.exams.filter(
+          (exam: ExamRecord) => new Date(exam.created_at) >= startOfWeek
+        ).length
+
+        const thisMonthExams = allExamsResponse.exams.filter(
+          (exam: ExamRecord) => new Date(exam.created_at) >= startOfMonth
+        ).length
+
+        setExamStats({
+          total: allExamsResponse.exams.length,
+          thisWeek: thisWeekExams,
+          thisMonth: thisMonthExams,
+        })
+      }
+    } catch (error) {
+      console.error('[HomePage] Failed to load exam history:', error)
+    } finally {
+      setIsLoadingExams(false)
+    }
+  }, [sessionToken, user])
+
+  // Fetch usage status and exam history on mount
   useEffect(() => {
     const fetchUsageStatus = async () => {
+      if (!user) return
+
       try {
-        const result = await window.electron.groq.getUsageStatus()
+        const result = await window.electron.groq.getUsageStatus(parseInt(user.id))
         if (result.success) {
           setUsageStatus(result as UsageStatus)
         }
@@ -62,7 +139,8 @@ export function HomePage() {
     }
 
     fetchUsageStatus()
-  }, [])
+    loadExamHistory()
+  }, [user, loadExamHistory])
 
   return (
     <div className="space-y-8">
@@ -84,21 +162,27 @@ export function HomePage() {
                 <h3 className="text-lg font-semibold text-green-900">Free AI Exam Generation</h3>
                 <p className="text-sm text-green-700">
                   <strong>
+                    {usageStatus.limits.examsPerWeek - usageStatus.usage.examsThisWeek}/
+                    {usageStatus.limits.examsPerWeek}
+                  </strong>{' '}
+                  exams remaining this week •{' '}
+                  <strong>
                     {usageStatus.limits.examsPerDay - usageStatus.usage.examsToday}/
                     {usageStatus.limits.examsPerDay}
                   </strong>{' '}
-                  exams remaining today •{' '}
-                  <strong>
-                    {usageStatus.limits.examsPerMonth - usageStatus.usage.examsThisMonth}/
-                    {usageStatus.limits.examsPerMonth}
-                  </strong>{' '}
-                  this month • Resets in {Math.ceil(usageStatus.resetTimes.dailyResetIn / 3600000)}{' '}
-                  hours
+                  today • Weekly resets in{' '}
+                  {usageStatus.resetTimes.weeklyResetIn ? Math.ceil(usageStatus.resetTimes.weeklyResetIn / (24 * 3600000)) : '?'} days
                 </p>
               </div>
             </div>
-            {usageStatus.usage.examsToday >= usageStatus.limits.examsPerDay && (
-              <span className="text-sm font-medium text-orange-600">Daily Limit Reached</span>
+            {!usageStatus.canGenerate && (
+              <span className="text-sm font-medium text-orange-600">
+                {usageStatus.usage.examsToday >= usageStatus.limits.examsPerDay
+                  ? 'Daily Limit Reached'
+                  : usageStatus.usage.examsThisWeek >= usageStatus.limits.examsPerWeek
+                    ? 'Weekly Limit Reached'
+                    : 'Limit Reached'}
+              </span>
             )}
           </CardContent>
         </Card>
@@ -118,18 +202,17 @@ export function HomePage() {
             className="gap-2"
             onClick={() => {
               // Check quota before allowing navigation
-              if (usageStatus && usageStatus.usage.examsToday >= usageStatus.limits.examsPerDay) {
-                alert(
-                  `Daily limit reached (${usageStatus.limits.examsPerDay} exams/day). Resets in ${Math.ceil(usageStatus.resetTimes.dailyResetIn / 3600000)} hours.`
-                )
+              if (usageStatus && !usageStatus.canGenerate) {
+                const reason =
+                  usageStatus.usage.examsToday >= usageStatus.limits.examsPerDay
+                    ? `Daily limit reached (${usageStatus.limits.examsPerDay}/day). Resets in ${usageStatus.resetTimes.dailyResetIn ? Math.ceil(usageStatus.resetTimes.dailyResetIn / 3600000) : '?'} hours.`
+                    : `Weekly limit reached (${usageStatus.limits.examsPerWeek}/week). Resets in ${usageStatus.resetTimes.weeklyResetIn ? Math.ceil(usageStatus.resetTimes.weeklyResetIn / (24 * 3600000)) : '?'} days.`
+                alert(reason)
               } else {
-                // Navigate to file upload page
                 navigate('/create-exam')
               }
             }}
-            disabled={
-              usageStatus ? usageStatus.usage.examsToday >= usageStatus.limits.examsPerDay : false
-            }
+            disabled={usageStatus ? !usageStatus.canGenerate : false}
           >
             <Plus className="h-4 w-4" />
             New Exam
@@ -141,81 +224,109 @@ export function HomePage() {
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Projects</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Exams</CardTitle>
             <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.total}</div>
+            <div className="text-2xl font-bold">{examStats.total}</div>
             <p className="text-xs text-muted-foreground">All time</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">In Progress</CardTitle>
+            <CardTitle className="text-sm font-medium">This Week</CardTitle>
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.inProgress}</div>
-            <p className="text-xs text-muted-foreground">Currently processing</p>
+            <div className="text-2xl font-bold">{examStats.thisWeek}</div>
+            <p className="text-xs text-muted-foreground">Since Monday</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Completed</CardTitle>
+            <CardTitle className="text-sm font-medium">This Month</CardTitle>
             <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.completed}</div>
-            <p className="text-xs text-muted-foreground">Ready to use</p>
+            <div className="text-2xl font-bold">{examStats.thisMonth}</div>
+            <p className="text-xs text-muted-foreground">Since {new Date().toLocaleDateString('en-US', { month: 'long' })} 1</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Recent Projects */}
+      {/* Recent Exams */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-2xl font-semibold tracking-tight">Recent Projects</h3>
+          <h3 className="text-2xl font-semibold tracking-tight">Recent Exams</h3>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate('/my-exams')}
+            className="gap-2"
+          >
+            <ExternalLink className="h-4 w-4" />
+            View All
+          </Button>
         </div>
 
-        {projects.length === 0 ? (
+        {isLoadingExams ? (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              <p className="mt-4 text-sm text-muted-foreground">Loading exams...</p>
+            </CardContent>
+          </Card>
+        ) : recentExams.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12">
               <FileText className="mb-4 h-12 w-12 text-muted-foreground" />
               <p className="text-center text-sm text-muted-foreground">
-                No projects yet. Create your first exam to get started!
+                No exams yet. Create your first exam to get started!
               </p>
             </CardContent>
           </Card>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {projects.map(project => (
-              <Card key={project.id} className="hover:shadow-md transition-shadow cursor-pointer">
+            {recentExams.slice(0, 3).map(exam => (
+              <Card
+                key={exam.id}
+                className="hover:shadow-md transition-shadow cursor-pointer"
+                onClick={() => {
+                  // Open PDF file using local file handler
+                  window.electron.openLocalFile(exam.file_path).catch(() => {
+                    alert('Could not open exam file. The file may have been moved or deleted.')
+                  })
+                }}
+              >
                 <CardHeader>
-                  <CardTitle className="line-clamp-1">{project.name}</CardTitle>
-                  <CardDescription>
-                    {new Date(project.createdAt).toLocaleDateString()}
+                  <CardTitle className="line-clamp-2 text-base">{exam.title}</CardTitle>
+                  <CardDescription className="flex items-center gap-2 text-xs">
+                    <Calendar className="h-3 w-3" />
+                    {new Date(exam.created_at).toLocaleDateString('en-US', {
+                      year: 'numeric',
+                      month: 'short',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">
-                      {project.filesCount} {project.filesCount === 1 ? 'file' : 'files'}
-                    </span>
-                    <span
-                      className={`rounded-full px-2 py-1 text-xs font-medium ${
-                        project.status === 'completed'
-                          ? 'bg-green-100 text-green-700'
-                          : project.status === 'processing'
-                            ? 'bg-blue-100 text-blue-700'
-                            : project.status === 'failed'
-                              ? 'bg-red-100 text-red-700'
-                              : 'bg-gray-100 text-gray-700'
-                      }`}
-                    >
-                      {project.status}
-                    </span>
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground line-clamp-1">
+                      <strong>Topic:</strong> {exam.topic}
+                    </p>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="flex items-center gap-1 text-muted-foreground">
+                        <Hash className="h-3 w-3" />
+                        {exam.total_questions} questions
+                      </span>
+                      <span className="rounded-full px-2 py-1 text-xs font-medium bg-green-100 text-green-700">
+                        Ready
+                      </span>
+                    </div>
                   </div>
                 </CardContent>
               </Card>

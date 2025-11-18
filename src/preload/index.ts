@@ -86,6 +86,11 @@ const electronAPI = {
     return ipcRenderer.invoke('open-external-url', url)
   },
 
+  // Open local file with system default application
+  openLocalFile: (filePath: string) => {
+    return ipcRenderer.invoke('open-local-file', filePath)
+  },
+
   // Generate PDF from exam data
   generateExamPDF: (examData: any, outputPath: string) => {
     return ipcRenderer.invoke('generate-exam-pdf', examData, outputPath)

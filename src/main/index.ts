@@ -411,6 +411,26 @@ function registerIpcHandlers(): void {
   })
 
   /**
+   * Open local file with system default application
+   *
+   * Used for opening generated PDF files.
+   */
+  ipcMain.handle('open-local-file', async (_, filePath: string) => {
+    console.log('[IPC] Open local file:', filePath)
+    try {
+      const result = await shell.openPath(filePath)
+      if (result) {
+        console.warn('[IPC] Failed to open file:', result)
+        return { success: false, error: result }
+      }
+      return { success: true }
+    } catch (error) {
+      console.error('[IPC] Error opening file:', error)
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+    }
+  })
+
+  /**
    * Generate PDF from exam data
    *
    * @param examData - Generated exam object
