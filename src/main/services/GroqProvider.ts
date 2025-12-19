@@ -420,6 +420,26 @@ ${startNumber + 1}. Evaluate the effectiveness of renewable energy sources.
 
 (Generate ${count} total essay questions, numbered ${startNumber} to ${endNumber})`
 
+      case 'matching':
+        return `Matching:
+
+${startNumber}. Match the terms with their correct definitions:
+
+Column A (Terms):          Column B (Definitions):
+A. Term One               1. Definition for term three
+B. Term Two               2. Definition for term one  
+C. Term Three             3. Definition for term two
+
+${startNumber + 1}. Match the concepts with their descriptions:
+
+Column A (Terms):          Column B (Definitions):
+A. Concept X              1. Description for concept Z
+B. Concept Y              2. Description for concept X
+C. Concept Z              3. Description for concept Y
+
+(Generate ${count} total matching questions, numbered ${startNumber} to ${endNumber})
+(CRITICAL MATCHING FORMAT: Each matching question must have two distinct columns - Terms (A,B,C) and Definitions (1,2,3). Randomize the definition order so they don't match the term order. Do not put definitions directly next to terms.)`
+
       default:
         return `${type}:
 
@@ -591,6 +611,28 @@ ${startNumber}. Sample question for ${type}
   private buildCriticalConstraints(): string {
     return `**🚨 ABSOLUTE CRITICAL CONSTRAINTS - FINAL CHECK BEFORE OUTPUT 🚨**
 
+⛔ **CONCEPT-LEVEL REPETITION ELIMINATION (TOP PRIORITY):**
+- Each question must test a COMPLETELY DIFFERENT concept, topic, or subject area
+- NO asking about the same biological process, historical event, mathematical concept, etc. multiple times
+- Examples of FORBIDDEN repetition: "Hox genes" in Q9, Q21, Q29 (ask once only)
+- Examples of FORBIDDEN repetition: "Neural crest" in Q6, Q7, Q8 (ask once only)  
+- Examples of FORBIDDEN repetition: "Somites" in Q4, Q13, Q23 (ask once only)
+- If you mention a specific concept/process/term in ANY question, DO NOT use it again
+- Spread questions across ALL major topics in the material - avoid clustering
+
+⛔ **ANSWER DISTRIBUTION RANDOMIZATION (CRITICAL):**
+- MULTIPLE CHOICE: Distribute correct answers roughly equally across A, B, C, D (approximately 25% each)
+- TRUE/FALSE: Balance True and False answers (approximately 50% True, 50% False)
+- NEVER have consecutive questions with same answer (avoid patterns like Q6=D, Q7=D, Q8=D)
+- NEVER have long streaks of True or False (avoid Q26-Q35 all being True)
+- Check your final answers - if you see patterns, deliberately randomize them
+
+⛔ **MATCHING FORMAT (STRUCTURAL REQUIREMENT):**
+- Matching questions MUST have two separate columns: Terms (A,B,C) and Definitions (1,2,3)
+- Definitions must be in SCRAMBLED ORDER - do not put definition 1 next to term A
+- Example: Term A might match with definition 3, Term B with definition 1, etc.
+- Do NOT write as bullet point lists - use proper column structure
+
 ⛔ **MULTIPLE CHOICE RULE (MOST IMPORTANT):**
 - Use "All of the above" MAXIMUM 1 time in your entire response
 - Use "None of the above" MAXIMUM 1 time in your entire response  
@@ -602,12 +644,6 @@ ${startNumber}. Sample question for ${type}
 - NO commas, semicolons, or CSV format
 - Write as clean sentences: "The result is _____." NOT "The result is, _____, which shows"
 - Each blank should be exactly 5 underscores
-
-⛔ **REPETITION ELIMINATION:**
-- Each question MUST test a completely different concept/fact
-- NO similar wording between questions
-- NO testing the same information in different ways
-- Every question must be 100% unique
 
 ⛔ **EXACT FORMAT COMPLIANCE:**
 - Output ONLY exam content - no meta-text or instructions
@@ -704,9 +740,19 @@ ${difficultyText}
 **CONTENT ANALYSIS REQUIREMENTS:**
 Before generating questions, mentally identify:
 1. Major topics/concepts in the material (aim for ${Math.ceil(config.totalQuestions / 3)}-${Math.ceil(config.totalQuestions / 2)} distinct topics)
-2. Key facts, definitions, and relationships
+2. Key facts, definitions, and relationships for each topic
 3. Appropriate difficulty levels for different concepts
-4. Ensure balanced coverage - no topic should have more than ${Math.ceil(config.totalQuestions / 3)} questions
+4. Create a mental list of specific terms/processes/concepts to avoid repetition
+5. Plan question distribution: no topic should have more than ${Math.ceil(config.totalQuestions / 3)} questions
+6. Identify unique aspects of each topic to ensure conceptual diversity
+
+**CONCEPT TRACKING STRATEGY:**
+- List all major concepts/processes/terms mentioned in source material
+- Assign each concept to ONLY ONE question (never repeat the same concept)
+- Examples: If "photosynthesis" is used in Q1, do not use it again in Q15
+- Examples: If "mitosis" is covered in Q3, do not ask about cell division again
+- Track specific scientific terms, historical figures, mathematical formulas, etc.
+- Ensure each question tests a fundamentally different piece of knowledge
 
 **STUDY MATERIAL:**
 ${truncatedSource}
@@ -814,8 +860,17 @@ Total Questions: ${config.totalQuestions}
 Before generating questions, mentally identify:
 1. Major topics/concepts suitable for ${difficultyLevel}-level questioning
 2. Key facts, definitions, and relationships that can be tested at ${difficultyLevel} level
-3. Ensure balanced coverage across topics while maintaining ${difficultyLevel} difficulty
-4. No topic should have more than ${Math.ceil(config.totalQuestions / 3)} questions
+3. Create a mental list of specific terms/processes/concepts to avoid repetition
+4. Ensure balanced coverage across topics while maintaining ${difficultyLevel} difficulty
+5. No topic should have more than ${Math.ceil(config.totalQuestions / 3)} questions
+
+**CONCEPT TRACKING STRATEGY:**
+- List all major concepts/processes/terms mentioned in source material
+- Assign each concept to ONLY ONE question (never repeat the same concept)
+- Examples: If "photosynthesis" is used in Q1, do not use it again in Q15
+- Examples: If "mitosis" is covered in Q3, do not ask about cell division again
+- Track specific scientific terms, historical figures, mathematical formulas, etc.
+- Ensure each question tests a fundamentally different piece of knowledge
 
 **STUDY MATERIAL:**
 ${truncatedSource}
