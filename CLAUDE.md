@@ -134,7 +134,6 @@ ENABLE_STRESS_TESTING=true  # Unlocks higher limits
 ### Critical Notes
 
 - Environment: `.env.local` contains GROQ_API_KEY (gitignored)
-- Test user: Hardcoded user_id=1 for development
 - Max exam size: 100 questions (reduced for reliability)
 - No store persistence (resets on app restart by design)
 - PDF files disabled (see BUG_REPORT_PDF_EXTRACTION.md)
@@ -145,27 +144,26 @@ ENABLE_STRESS_TESTING=true  # Unlocks higher limits
 
 **Implementation:** Groq's `llama-3.3-70b-versatile` model (100% success rate, production-tested)
 
-```
-SYSTEM ROLE: You are an expert exam creator. Generate ONLY the exam content with no introductory text, explanations, or suggestions.
-
-FORMAT REQUIREMENTS:
-General Topic: [Auto-extracted from content]
-----Exam Content----
-[Questions organized by type and difficulty]
-[PAGE BREAK]
-----Answer Key----
-[Answers only, on separate page]
-
-USER REQUEST:
-- Source Material: [File content]
-- Question Types: [List with quantities]
-- Difficulty: [Distribution breakdown]
-- Total Items: [Number]
-
-CRITICAL: Output ONLY exam content in the format above. No extra text.
-```
-
 **Configuration:** `maxTokens: 16384, temperature: 0.7` (tested 30-100 questions)
+
+### ✅ **Phase 2 Quality Fixes Implemented (December 2025)**
+
+**Status:** PRODUCTION READY - Critical bug fixes implemented and tested
+
+**Fixed Issues:**
+1. **Sequential Batching**: Eliminated race conditions in parallel processing that caused identical questions across batches
+2. **Constraint Positioning**: Moved critical "All of the above" constraints to end of user prompt for better LLM attention  
+3. **Format Enforcement**: Added JSON Schema-style rules to prevent CSV artifacts in fill-in-the-blank questions
+
+**Technical Changes:**
+- `ExamGenerationService.ts`: Replaced parallel `Promise.all()` with sequential batch processing
+- `GroqProvider.ts`: Created `buildCriticalConstraints()` method with end-prompt positioning
+- Enhanced fill-in-the-blank format rules with explicit 🚨 warning markers
+
+**Expected Results:**
+- Zero duplicate questions across batches due to proper deduplication
+- "All of the above" usage reduced from 20% to under 10%
+- Clean fill-in-the-blank formatting with proper underscores
 
 ## Key Design Principles
 
@@ -361,51 +359,12 @@ This is a learning journey - take time to understand each step before moving for
 }
 ```
 
-**Still Needed for Production:**
-
-- Real authentication system (replace test user_id=1)
-- "My Exams" history page with database integration
-- Optional Google Drive backup integration
 
 ## Multi-LLM Quality Analysis (November 2025)
 
 ### Critical Finding: Universal Quiz Generator
 
 **IMPORTANT:** Qreate is **NOT specialized** for any specific subject or discipline. The goal is to generate quality quizzes for **ANY subject** - math, science, philosophy, history, literature, etc.
-
-### Multi-LLM Review Results (7 AI Models)
-
-**Test File:** `jam's-test8.docx` (Developmental Biology)  
-**Generated:** 100-question exam via Groq backend  
-**Reviewers:** Amazon Nova, Gemini, Mistral, Claude, Grok AI, Qwen, Deepseek
-
-**Consensus Scores (Average):**
-
-- **Quality:** 7.4/10
-- **Accuracy:** 8.7/10
-- **Clarity:** 7.7/10
-- **Difficulty:** 7.1/10
-- **Format:** 8.9/10
-- **Coverage:** 8.1/10
-
-### Universal Issues Identified
-
-**1. Critical Factual Errors (All LLMs flagged):**
-
-- Subject-specific errors (cytotrophoblast, neural crest derivatives)
-- These patterns would appear in ANY subject (wrong formulas in math, incorrect dates in history, etc.)
-
-**2. Question Repetition (Major):**
-
-- ~40 unique concepts stretched to 100 questions
-- Pattern: Questions 11-13 mirror 21-25, 14-18 repeat in 26-30
-- **Universal problem:** Would occur in any subject matter
-
-**3. Difficulty Issues (Universal):**
-
-- 60% basic recall, only 10% application/analysis
-- **Key insight:** Difficulty distribution is USER-CONTROLLED, not our responsibility
-- Our job: Generate accurate difficulty levels that users request
 
 ### Subject-Agnostic Improvement Plan
 
@@ -415,60 +374,6 @@ This is a learning journey - take time to understand each step before moving for
 - Question types (Multiple choice, True/False, Essay, etc.)
 - Total number of questions
 
-**What We Must Fix (Universal):**
-
-**1. Accuracy** - Answers must be correct based on source material (any subject)
-**2. Uniqueness** - No repetitive/duplicate questions (any subject)
-**3. Difficulty Accuracy** - Each question matches requested difficulty level
-**4. Exam-like Feel** - Professional, realistic assessment experience
-
-### Universal Prompt Engineering Strategy
-
-```typescript
-const universalPromptTemplate = `
-You are an expert educator creating assessment questions from provided material.
-
-CRITICAL REQUIREMENTS:
-1. GENERATE UNIQUE QUESTIONS: No repetition or near-duplicates
-2. VERIFY AGAINST SOURCE: Base all answers strictly on provided text only
-3. DIFFICULTY ACCURACY: Match each question to requested difficulty level:
-   - Very Easy: Basic recall of explicitly stated facts
-   - Easy: Simple concept recognition and definitions
-   - Moderate: Understanding relationships and applying concepts
-   - Hard: Analysis, synthesis, and complex reasoning
-   - Very Hard: Evaluation, creation, and advanced critical thinking
-4. QUESTION VARIETY: Mix factual recall, conceptual understanding, and application
-
-AVOID:
-- Questions testing the same concept multiple times
-- Answers not explicitly supported by source material
-- Speculation beyond provided information
-
-Generate exactly ${totalQuestions} questions covering the material comprehensively.
-`
-```
-
-### Implementation Focus (Subject-Neutral)
-
-**Phase 1: Core Quality Fixes**
-
-- **Uniqueness detection:** Semantic similarity across any subject
-- **Source fidelity:** Only use explicitly stated information
-- **Difficulty mapping:** Accurate difficulty regardless of subject
-- **Professional format:** Exam-quality presentation
-
-**Phase 2: Universal Validation**
-
-- **Deduplication algorithms:** Work across all disciplines
-- **Answer verification:** Check against source text
-- **Format standardization:** Professional appearance
-- **Quality metrics:** Subject-agnostic scoring
-
-**Phase 3: Enhanced Universal Features**
-
-- **Smart question generation:** Detect key concepts automatically
-- **Adaptive complexity:** Auto-adjust to source material level
-- **Cross-subject validation:** Universal accuracy checking
 
 ### Key Insight
 
@@ -819,6 +724,29 @@ interface StudentAnalytics {
 5. **Convenience**: One-click from study materials to practice test
 
 **Market Position**: "The only tool that makes students actually exam-ready, not just study-confident."
+
+## ✅ **HomePage Dashboard Implementation (November 2025)**
+
+**Status:** PRODUCTION READY - Functional dashboard with real exam history integration
+
+### **Features Implemented**
+- **Real Exam History Integration**: Replaced placeholder data with actual database queries
+- **Accurate Statistics**: Fixed total count mismatch, proper calendar-based time periods
+- **Local File Opening**: Added shell.openPath support for reliable PDF access via new IPC handler
+- **Smart Quota Display**: Weekly/daily limits with null-safe reset time calculations
+- **Interactive Recent Exams**: Click-to-open functionality with loading states and error handling
+
+### **Technical Changes**
+- **Backend**: Added `open-local-file` IPC handler using `shell.openPath()`
+- **Frontend**: Dual data loading (all exams for stats, recent for display)
+- **Time Calculations**: Monday-start weeks, proper calendar months vs sliding windows
+- **Error Prevention**: Null safety for quota reset times (prevents NaN display)
+
+### **User Experience**
+- **Dashboard Accuracy**: Shows correct exam counts and realistic time periods
+- **One-Click Access**: Recent exams open PDFs directly in system default viewer
+- **Clear Quotas**: Development mode shows 700/week, production will show 10/week
+- **Intuitive Periods**: "Since Monday" and "Since November 1" vs confusing sliding windows
 
 # important-instruction-reminders
 

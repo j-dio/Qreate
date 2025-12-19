@@ -1,7 +1,7 @@
 /**
  * Exam Generation Service
  *
- * Orchestrates the exam generation process using AI providers.
+ * Orchestrates the exam generation process using AI providers with smart batching.
  *
  * Process Flow:
  * 1. Validate configuration (files, question types, difficulty)
@@ -9,20 +9,22 @@
  * 3. Process files sequentially (avoid rate limits)
  * 4. For each file:
  *    a. Extract text content
- *    b. Build prompt with configuration
- *    c. Call AI provider
- *    d. Parse and validate response
- *    e. Retry on failure (max 3 attempts)
- * 5. Aggregate all questions
+ *    b. Determine optimal batching strategy (>10 questions = batched)
+ *    c. For large requests: Split into parallel batches (8-10 questions each)
+ *    d. For small requests: Single generation call
+ *    e. Aggregate and deduplicate across batches
+ *    f. Retry on failure (max 3 attempts per batch)
+ * 5. Aggregate all questions with cross-batch validation
  * 6. Validate total question counts
- * 7. Check for duplicates
+ * 7. Check for duplicates across entire exam
  * 8. Return generated exam
  *
  * Error Handling:
- * - Network errors: Retry with exponential backoff
- * - Malformed responses: Retry with refined prompt
- * - Rate limits: Wait and retry
+ * - Network errors: Retry with exponential backoff per batch
+ * - Malformed responses: Retry individual batch vs. full restart
+ * - Rate limits: Wait and retry with staggered batch timing
  * - File processing errors: Skip file and continue
+ * - Quality issues: Early termination with batch-specific feedback
  */
 
 import type { UploadedFile } from '../store/useFileUploadStore'
@@ -31,6 +33,28 @@ import type { AIProviderType } from '../types/ai-providers'
 import type { GeneratedQuestion, GeneratedExam } from '../../../shared/types/exam'
 import { AIProviderFactory } from './ai-providers/provider-factory'
 import { ExamParser } from '../../../shared/services/ExamParser'
+
+/**
+ * Batching Configuration for Large Exam Generation
+ * 
+ * These values are optimized for llama-3.3-70b-versatile model performance.
+ */
+const BATCH_CONFIG = {
+  /** Threshold above which requests are split into batches */
+  BATCH_THRESHOLD: 10,
+  
+  /** Optimal batch size for quality and performance balance */
+  OPTIMAL_BATCH_SIZE: 8,
+  
+  /** Maximum number of parallel batches to prevent rate limiting */
+  MAX_PARALLEL_BATCHES: 3,
+  
+  /** Delay between batch starts (milliseconds) to stagger API calls */
+  BATCH_STAGGER_DELAY: 200,
+  
+  /** Minimum questions per batch to ensure meaningful generation */
+  MIN_BATCH_SIZE: 3,
+} as const
 
 /**
  * Exam Configuration for Generation
@@ -46,7 +70,21 @@ export interface ExamGenerationConfig {
 }
 
 /**
- * Progress Callback
+ * Batch Information for Large Generation Requests
+ */
+export interface BatchInfo {
+  id: string
+  questionsCount: number
+  difficultyDistribution: Record<DifficultyLevel, number>
+  questionTypes: Record<QuestionType, number>
+  sourceText: string
+  fileName: string
+  batchIndex: number
+  totalBatches: number
+}
+
+/**
+ * Progress Callback with Batch Support
  */
 export type ProgressCallback = (progress: {
   currentFile: string
@@ -54,6 +92,12 @@ export type ProgressCallback = (progress: {
   totalFiles: number
   questionsGenerated: number
   totalQuestionsNeeded: number
+  batchInfo?: {
+    currentBatch: number
+    totalBatches: number
+    batchesCompleted: number
+    isUsingBatches: boolean
+  }
 }) => void
 
 /**
@@ -115,14 +159,24 @@ export class ExamGenerationService {
   private maxRetries = 3
   private retryDelay = 1000 // milliseconds
   private examParser: ExamParser
+  
+  // Batch management state
+  private allGeneratedQuestions: GeneratedQuestion[] = []
+  private batchQualityTracker: Map<string, QualityMetrics> = new Map()
+  private globalQuestionTracker: Set<string> = new Set() // Track question content for deduplication
 
   constructor(config: ExamGenerationConfig) {
     this.config = config
     this.examParser = new ExamParser()
+    
+    // Reset state for new generation
+    this.allGeneratedQuestions = []
+    this.batchQualityTracker.clear()
+    this.globalQuestionTracker.clear()
   }
 
   /**
-   * Generate exam from configuration
+   * Generate exam from configuration with smart batching
    */
   async generate(onProgress?: ProgressCallback): Promise<ExamGenerationResult> {
     try {
@@ -133,60 +187,53 @@ export class ExamGenerationService {
       const provider = this.getAIProvider()
 
       // Process files sequentially
-      const allQuestions: GeneratedQuestion[] = []
-      const qualityMetricsArray: QualityMetrics[] = []
       const totalFiles = this.config.files.length
 
       for (let i = 0; i < totalFiles; i++) {
         const file = this.config.files[i]
 
-        // Report progress
-        if (onProgress) {
-          onProgress({
-            currentFile: file.name,
-            currentFileIndex: i,
-            totalFiles,
-            questionsGenerated: allQuestions.length,
-            totalQuestionsNeeded: this.config.totalQuestions,
-          })
-        }
-
-        // Extract text from file
-        const fileContent = await this.extractTextFromFile(file)
-
         // Calculate questions to generate from this file
         const questionsPerFile = Math.ceil(this.config.totalQuestions / totalFiles)
-        const questionsRemaining = this.config.totalQuestions - allQuestions.length
+        const questionsRemaining = this.config.totalQuestions - this.allGeneratedQuestions.length
         const questionsToGenerate = Math.min(questionsPerFile, questionsRemaining)
 
         if (questionsToGenerate <= 0) {
           continue // Already generated enough questions
         }
 
-        // Generate questions from this file
-        const { questions, rawResponse, qualityMetrics } = await this.generateQuestionsFromFile(
-          provider,
-          fileContent,
-          file.name,
-          questionsToGenerate
-        )
+        // Extract text from file
+        const fileContent = await this.extractTextFromFile(file)
 
-        allQuestions.push(...questions)
-
-        // Collect quality metrics
-        if (qualityMetrics) {
-          qualityMetricsArray.push(qualityMetrics)
+        // Smart Batching Decision: Check if we need to batch this file
+        if (questionsToGenerate > BATCH_CONFIG.BATCH_THRESHOLD) {
+          console.log(`[ExamGenerationService] Using batching strategy for ${questionsToGenerate} questions`)
+          
+          // Generate using batching strategy
+          await this.generateQuestionsWithBatching(
+            fileContent,
+            file.name,
+            questionsToGenerate,
+            i,
+            totalFiles,
+            onProgress
+          )
+        } else {
+          console.log(`[ExamGenerationService] Using single generation for ${questionsToGenerate} questions`)
+          
+          // Generate using single call strategy
+          await this.generateQuestionsFromFileSingle(
+            provider,
+            fileContent,
+            file.name,
+            questionsToGenerate,
+            i,
+            totalFiles,
+            onProgress
+          )
         }
 
-        // Log raw response for debugging
-        console.log('[ExamGenerationService] ========== RAW AI RESPONSE ==========')
-        console.log(rawResponse)
-        console.log('[ExamGenerationService] ========== END RAW RESPONSE ==========')
-        console.log('[ExamGenerationService] Parsed questions:', questions)
-        console.log('[ExamGenerationService] First question:', questions[0])
-
         // Stop if we have enough questions
-        if (allQuestions.length >= this.config.totalQuestions) {
+        if (this.allGeneratedQuestions.length >= this.config.totalQuestions) {
           break
         }
       }
@@ -197,16 +244,16 @@ export class ExamGenerationService {
           currentFile: '',
           currentFileIndex: totalFiles,
           totalFiles,
-          questionsGenerated: allQuestions.length,
+          questionsGenerated: this.allGeneratedQuestions.length,
           totalQuestionsNeeded: this.config.totalQuestions,
         })
       }
 
       // Validate and create exam
-      const exam = this.createExam(allQuestions)
+      const exam = this.createExam(this.allGeneratedQuestions)
 
-      // Aggregate quality metrics from all files
-      const aggregatedQualityMetrics = this.aggregateQualityMetrics(qualityMetricsArray)
+      // Aggregate quality metrics from all batches
+      const aggregatedQualityMetrics = this.aggregateQualityMetrics(Array.from(this.batchQualityTracker.values()))
 
       return {
         success: true,
@@ -288,6 +335,138 @@ export class ExamGenerationService {
     })
 
     return result.text
+  }
+
+  /**
+   * Generate questions using intelligent batching strategy
+   * 
+   * Splits large requests into optimal batches for better quality and success rate.
+   * FIXED: Now processes batches sequentially to prevent race conditions in deduplication.
+   */
+  private async generateQuestionsWithBatching(
+    fileContent: string,
+    fileName: string,
+    questionsToGenerate: number,
+    fileIndex: number,
+    totalFiles: number,
+    onProgress?: ProgressCallback
+  ): Promise<void> {
+    // Create batches
+    const batches = this.createOptimalBatches(questionsToGenerate, fileContent, fileName)
+    console.log(`[ExamGenerationService] Created ${batches.length} batches for ${questionsToGenerate} questions`)
+    console.log(`[ExamGenerationService] SEQUENTIAL MODE: Processing batches one at a time to prevent race conditions`)
+
+    // Process batches sequentially to ensure proper deduplication
+    for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+      const batch = batches[batchIndex]
+      
+      console.log(`[ExamGenerationService] Starting batch ${batch.batchIndex + 1}/${batch.totalBatches} (${batch.questionsCount} questions)`)
+      console.log(`[ExamGenerationService] Global question tracker has ${this.globalQuestionTracker.size} questions so far`)
+
+      // Report batch progress
+      if (onProgress) {
+        onProgress({
+          currentFile: batch.fileName,
+          currentFileIndex: fileIndex,
+          totalFiles,
+          questionsGenerated: this.allGeneratedQuestions.length,
+          totalQuestionsNeeded: this.config.totalQuestions,
+          batchInfo: {
+            currentBatch: batch.batchIndex + 1,
+            totalBatches: batch.totalBatches,
+            batchesCompleted: batch.batchIndex,
+            isUsingBatches: true,
+          },
+        })
+      }
+
+      try {
+        // Generate questions for this batch (sequential processing ensures no race conditions)
+        const { questions, qualityMetrics } = await this.generateBatchQuestions(batch)
+        
+        // Add questions to global collection with deduplication (now thread-safe)
+        const newQuestions = this.addQuestionsWithDeduplication(questions, batch.id)
+        
+        // Track quality metrics
+        if (qualityMetrics) {
+          this.batchQualityTracker.set(batch.id, qualityMetrics)
+        }
+
+        console.log(`[ExamGenerationService] Batch ${batch.batchIndex + 1} completed: ${newQuestions.length} new questions added (${questions.length - newQuestions.length} duplicates filtered)`)
+        console.log(`[ExamGenerationService] Total unique questions so far: ${this.allGeneratedQuestions.length}`)
+        
+        // Add small delay between batches to respect rate limits
+        if (batchIndex < batches.length - 1) {
+          console.log(`[ExamGenerationService] Waiting ${BATCH_CONFIG.BATCH_STAGGER_DELAY}ms before next batch...`)
+          await this.sleep(BATCH_CONFIG.BATCH_STAGGER_DELAY)
+        }
+        
+      } catch (error) {
+        console.error(`[ExamGenerationService] Batch ${batch.batchIndex + 1} failed:`, error)
+        // Continue with remaining batches - don't fail the entire generation
+      }
+    }
+    
+    console.log(`[ExamGenerationService] Completed all ${batches.length} batches for ${fileName}. Total unique questions: ${this.allGeneratedQuestions.length}`)
+  }
+
+  /**
+   * REMOVED: processBatchWithDelay method
+   * 
+   * This method was causing race conditions by processing batches in parallel.
+   * Batch processing is now handled sequentially in generateQuestionsWithBatching().
+   */
+
+  /**
+   * Generate questions using single call strategy (for small requests)
+   */
+  private async generateQuestionsFromFileSingle(
+    provider: any,
+    fileContent: string,
+    fileName: string,
+    questionsToGenerate: number,
+    fileIndex: number,
+    totalFiles: number,
+    onProgress?: ProgressCallback
+  ): Promise<void> {
+    // Report progress
+    if (onProgress) {
+      onProgress({
+        currentFile: fileName,
+        currentFileIndex: fileIndex,
+        totalFiles,
+        questionsGenerated: this.allGeneratedQuestions.length,
+        totalQuestionsNeeded: this.config.totalQuestions,
+        batchInfo: {
+          currentBatch: 1,
+          totalBatches: 1,
+          batchesCompleted: 0,
+          isUsingBatches: false,
+        },
+      })
+    }
+
+    const { questions, rawResponse, qualityMetrics } = await this.generateQuestionsFromFile(
+      provider,
+      fileContent,
+      fileName,
+      questionsToGenerate
+    )
+
+    // Add to global collection
+    this.allGeneratedQuestions.push(...questions)
+
+    // Track quality metrics
+    if (qualityMetrics) {
+      this.batchQualityTracker.set(`single-${fileName}-${Date.now()}`, qualityMetrics)
+    }
+
+    // Log raw response for debugging
+    console.log('[ExamGenerationService] ========== RAW AI RESPONSE ==========')
+    console.log(rawResponse)
+    console.log('[ExamGenerationService] ========== END RAW RESPONSE ==========')
+    console.log('[ExamGenerationService] Parsed questions:', questions)
+    console.log('[ExamGenerationService] First question:', questions[0])
   }
 
   /**
@@ -468,6 +647,190 @@ export class ExamGenerationService {
     }
 
     return questions
+  }
+
+  /**
+   * Create optimal batches for large exam generation
+   */
+  private createOptimalBatches(totalQuestions: number, sourceText: string, fileName: string): BatchInfo[] {
+    const batches: BatchInfo[] = []
+    const batchSize = Math.min(BATCH_CONFIG.OPTIMAL_BATCH_SIZE, totalQuestions)
+    const numBatches = Math.ceil(totalQuestions / batchSize)
+    
+    console.log(`[ExamGenerationService] Creating ${numBatches} batches of ~${batchSize} questions each`)
+
+    for (let batchIndex = 0; batchIndex < numBatches; batchIndex++) {
+      const startQuestion = batchIndex * batchSize
+      const endQuestion = Math.min(startQuestion + batchSize, totalQuestions)
+      const questionsInBatch = endQuestion - startQuestion
+      
+      // Proportionally distribute question types and difficulty across batches
+      const batchQuestionTypes = this.distributeBatchQuestionTypes(questionsInBatch)
+      const batchDifficultyDistribution = this.distributeBatchDifficulty(questionsInBatch)
+      
+      const batch: BatchInfo = {
+        id: `batch-${fileName}-${batchIndex}-${Date.now()}`,
+        questionsCount: questionsInBatch,
+        difficultyDistribution: batchDifficultyDistribution,
+        questionTypes: batchQuestionTypes,
+        sourceText: sourceText,
+        fileName: fileName,
+        batchIndex: batchIndex,
+        totalBatches: numBatches,
+      }
+      
+      batches.push(batch)
+      
+      console.log(`[ExamGenerationService] Batch ${batchIndex + 1}: ${questionsInBatch} questions, types:`, batchQuestionTypes)
+    }
+
+    return batches
+  }
+
+  /**
+   * Distribute question types proportionally across a batch
+   */
+  private distributeBatchQuestionTypes(batchSize: number): Record<QuestionType, number> {
+    const totalQuestions = this.config.totalQuestions
+    const scale = batchSize / totalQuestions
+    
+    const batchTypes: Record<QuestionType, number> = {} as Record<QuestionType, number>
+    
+    for (const [type, count] of Object.entries(this.config.questionTypes)) {
+      const scaledCount = Math.round((count as number) * scale)
+      if (scaledCount > 0) {
+        batchTypes[type as QuestionType] = scaledCount
+      }
+    }
+    
+    // Ensure we have at least some questions in the batch
+    const totalAssigned = Object.values(batchTypes).reduce((sum, count) => sum + count, 0)
+    if (totalAssigned === 0 && batchSize > 0) {
+      // Fallback: assign to multiple choice
+      batchTypes.multipleChoice = batchSize
+    } else if (totalAssigned < batchSize) {
+      // Add remaining questions to the most popular type
+      const mostPopularType = Object.entries(batchTypes).sort(([,a], [,b]) => b - a)[0]?.[0] as QuestionType
+      if (mostPopularType) {
+        batchTypes[mostPopularType] += (batchSize - totalAssigned)
+      }
+    }
+    
+    return batchTypes
+  }
+
+  /**
+   * Distribute difficulty levels proportionally across a batch
+   */
+  private distributeBatchDifficulty(batchSize: number): Record<DifficultyLevel, number> {
+    const totalQuestions = this.config.totalQuestions
+    const scale = batchSize / totalQuestions
+    
+    const batchDifficulty: Record<DifficultyLevel, number> = {} as Record<DifficultyLevel, number>
+    
+    for (const [level, count] of Object.entries(this.config.difficultyDistribution)) {
+      const scaledCount = Math.round((count as number) * scale)
+      if (scaledCount > 0) {
+        batchDifficulty[level as DifficultyLevel] = scaledCount
+      }
+    }
+    
+    // Ensure we have at least some difficulty assigned
+    const totalAssigned = Object.values(batchDifficulty).reduce((sum, count) => sum + count, 0)
+    if (totalAssigned === 0 && batchSize > 0) {
+      // Fallback: assign to moderate difficulty
+      batchDifficulty.moderate = batchSize
+    } else if (totalAssigned < batchSize) {
+      // Add remaining questions to the most popular difficulty
+      const mostPopularDifficulty = Object.entries(batchDifficulty).sort(([,a], [,b]) => b - a)[0]?.[0] as DifficultyLevel
+      if (mostPopularDifficulty) {
+        batchDifficulty[mostPopularDifficulty] += (batchSize - totalAssigned)
+      }
+    }
+    
+    return batchDifficulty
+  }
+
+  /**
+   * Generate questions for a specific batch
+   */
+  private async generateBatchQuestions(batch: BatchInfo): Promise<{ questions: GeneratedQuestion[]; qualityMetrics?: QualityMetrics }> {
+    // Build exam config for this specific batch
+    const batchConfig = {
+      questionTypes: batch.questionTypes,
+      difficultyDistribution: batch.difficultyDistribution,
+      totalQuestions: batch.questionsCount,
+    }
+
+    console.log(`[ExamGenerationService] Generating batch ${batch.batchIndex + 1} with config:`, batchConfig)
+
+    // Use Groq backend for generation
+    const groqResult = await window.electron.groq.generateExam(batchConfig, batch.sourceText, this.config.userId)
+
+    if (!groqResult.success) {
+      throw new Error(groqResult.error || 'Batch generation failed')
+    }
+
+    // Use structured exam data from backend if available
+    let questions: GeneratedQuestion[]
+    
+    if (groqResult.exam && groqResult.exam.questions) {
+      questions = groqResult.exam.questions
+    } else {
+      // Fallback: Parse response manually
+      questions = this.parseAIResponse(groqResult.content)
+    }
+
+    if (questions.length === 0) {
+      throw new Error(`No questions generated for batch ${batch.batchIndex + 1}`)
+    }
+
+    console.log(`[ExamGenerationService] Batch ${batch.batchIndex + 1} generated ${questions.length} questions`)
+
+    return {
+      questions,
+      qualityMetrics: groqResult.qualityMetrics,
+    }
+  }
+
+  /**
+   * Add questions to global collection with cross-batch deduplication
+   */
+  private addQuestionsWithDeduplication(questions: GeneratedQuestion[], batchId: string): GeneratedQuestion[] {
+    const newQuestions: GeneratedQuestion[] = []
+    
+    for (const question of questions) {
+      // Create a content fingerprint for deduplication
+      const contentFingerprint = this.createQuestionFingerprint(question)
+      
+      // Check if we've seen this question before (across all batches)
+      if (!this.globalQuestionTracker.has(contentFingerprint)) {
+        this.globalQuestionTracker.add(contentFingerprint)
+        this.allGeneratedQuestions.push(question)
+        newQuestions.push(question)
+      } else {
+        console.log(`[ExamGenerationService] Duplicate question filtered from batch ${batchId}:`, question.question.substring(0, 50) + '...')
+      }
+    }
+    
+    console.log(`[ExamGenerationService] Added ${newQuestions.length} new questions, filtered ${questions.length - newQuestions.length} duplicates`)
+    return newQuestions
+  }
+
+  /**
+   * Create a unique fingerprint for a question to detect duplicates
+   */
+  private createQuestionFingerprint(question: GeneratedQuestion): string {
+    // Normalize question text for comparison
+    const normalizedText = question.question
+      .toLowerCase()
+      .replace(/[^\w\s]/g, '') // Remove punctuation
+      .replace(/\s+/g, ' ') // Normalize whitespace
+      .trim()
+    
+    // Include question type and first few words for uniqueness
+    const firstWords = normalizedText.split(' ').slice(0, 8).join(' ')
+    return `${question.type}:${firstWords}`
   }
 
   /**

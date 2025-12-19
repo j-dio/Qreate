@@ -227,18 +227,46 @@ export class GroqProvider {
   }
 
   /**
-   * Build the exam generation prompt
+   * Build the exam generation prompt with difficulty specialization
    *
-   * This is critical - the prompt structure determines output quality.
+   * ENHANCED STRATEGY FOR QUALITY:
+   * - Splits difficulty levels for specialized handling
+   * - Implements strict negative constraints to prevent repetition
+   * - Enforces cross-batch uniqueness requirements
+   * - Uses difficulty-specific prompt strategies for better accuracy
    *
    * Prompt Engineering Principles:
    * 1. Clear role definition (you are an expert exam creator)
    * 2. Explicit format requirements (structure, no extra text)
-   * 3. Specific constraints (difficulty levels, question types)
-   * 4. Concrete examples (show exact format expected)
-   * 5. Output format specification
+   * 3. Difficulty-specific constraints (specialized for each level)
+   * 4. Negative constraints (what NOT to do)
+   * 5. Cross-batch deduplication requirements
+   * 6. Concrete examples (show exact format expected)
+   * 7. Output format specification
    */
   public buildExamPrompt(config: ExamGenerationConfig, sourceText: string): string {
+    // Determine if this is a difficulty-specialized batch
+    const difficultyLevels = Object.entries(config.difficultyDistribution)
+      .filter(([_, count]) => count > 0)
+      .map(([level]) => level)
+    
+    const isDifficultySpecialized = difficultyLevels.length === 1
+    const dominantDifficulty = isDifficultySpecialized ? difficultyLevels[0] : null
+
+    // Use specialized prompt if single difficulty, otherwise use mixed prompt
+    if (isDifficultySpecialized && dominantDifficulty) {
+      console.log(`[GroqProvider] Using specialized prompt for difficulty: ${dominantDifficulty}`)
+      return this.buildDifficultySpecializedPrompt(config, sourceText, dominantDifficulty)
+    } else {
+      console.log('[GroqProvider] Using mixed difficulty prompt with enhanced constraints')
+      return this.buildMixedDifficultyPrompt(config, sourceText)
+    }
+  }
+
+  /**
+   * Build the original exam generation prompt (now with enhanced constraints)
+   */
+  public buildMixedDifficultyPrompt(config: ExamGenerationConfig, sourceText: string): string {
     // Get selected question types with counts
     const selectedTypes = Object.entries(config.questionTypes)
       .filter(([_, count]) => count && count > 0)
@@ -268,8 +296,51 @@ export class GroqProvider {
         ? sourceText.substring(0, maxSourceLength) + '\n\n[... content truncated ...]'
         : sourceText
 
-    // Build the final prompt with dynamic content
-    return this.buildDynamicPrompt(selectedTypes, formatSections, typeSpecificRules, difficultyText, config, truncatedSource)
+    // Build the final prompt with enhanced negative constraints
+    return this.buildEnhancedPrompt(selectedTypes, formatSections, typeSpecificRules, difficultyText, config, truncatedSource, false)
+  }
+
+  /**
+   * Build difficulty-specialized prompt for single difficulty levels
+   */
+  public buildDifficultySpecializedPrompt(config: ExamGenerationConfig, sourceText: string, difficulty: string): string {
+    // Get selected question types with counts
+    const selectedTypes = Object.entries(config.questionTypes)
+      .filter(([_, count]) => count && count > 0)
+      .map(([type, count]) => ({ type, count }))
+
+    // For specialized prompts, we know all questions are the same difficulty
+    const difficultyText = `All ${config.totalQuestions} questions at ${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)} difficulty level`
+
+    // Build dynamic format section based on selected types
+    const formatSections = this.buildDynamicFormatSections(selectedTypes)
+    
+    // Build type-specific quality rules
+    const typeSpecificRules = this.buildTypeSpecificRules(selectedTypes)
+
+    // Get difficulty-specific rules and examples
+    const difficultySpecificRules = this.buildDifficultySpecificRules(difficulty)
+    const difficultyExamples = this.buildDifficultyExamples(difficulty, selectedTypes)
+
+    // Truncate source text if too long
+    const maxSourceLength = 100000 // ~25k words
+    const truncatedSource =
+      sourceText.length > maxSourceLength
+        ? sourceText.substring(0, maxSourceLength) + '\n\n[... content truncated ...]'
+        : sourceText
+
+    // Build specialized prompt with difficulty focus
+    return this.buildDifficultyFocusedPrompt(
+      selectedTypes, 
+      formatSections, 
+      typeSpecificRules, 
+      difficultyText, 
+      difficulty,
+      difficultySpecificRules,
+      difficultyExamples,
+      config, 
+      truncatedSource
+    )
   }
 
   /**
@@ -328,7 +399,8 @@ ${startNumber}. The process of _____ involves the breakdown of glucose.
 
 ${startNumber + 1}. During photosynthesis, _____ is converted to oxygen.
 
-(Generate ${count} total fill-in-the-blank questions, numbered ${startNumber} to ${endNumber})`
+(Generate ${count} total fill-in-the-blank questions, numbered ${startNumber} to ${endNumber})
+(CRITICAL: Use ONLY single underscores like _____ for blanks, NO commas or CSV format)`
 
       case 'shortAnswer':
         return `Short Answer:
@@ -383,8 +455,11 @@ ${startNumber}. Sample question for ${type}
     }
 
     if (hasFillInBlanks) {
-      rules.push(`**FILL-IN-THE-BLANKS RULES:**
-- Use single underlines _____ for blanks
+      rules.push(`**FILL-IN-THE-BLANKS RULES (CRITICAL FORMAT):**
+- Use EXACTLY _____ (5 underscores) for each blank
+- DO NOT use commas, semicolons, or CSV format
+- Write as normal sentences with _____ replacing the missing word
+- Example: "The capital of France is _____." NOT "The capital of France is, _____, a major city"
 - Make the missing term essential to understanding
 - Ensure only one correct answer fits the blank`)
     }
@@ -393,15 +468,170 @@ ${startNumber}. Sample question for ${type}
   }
 
   /**
-   * Build the complete dynamic prompt
+   * Build difficulty-specific rules for specialized prompts
    */
-  private buildDynamicPrompt(
+  private buildDifficultySpecificRules(difficulty: string): string {
+    switch (difficulty.toLowerCase()) {
+      case 'veryeasy':
+      case 'easy':
+        return `**EASY DIFFICULTY REQUIREMENTS:**
+- Focus on direct facts, definitions, and basic recall from the material
+- Use simple, straightforward language
+- Test memorization and recognition of key terms
+- Questions should have obvious answers if material was read
+- Examples: "What is...", "Define...", "List...", "Name the..."
+- Avoid complex reasoning or multi-step thinking`
+
+      case 'moderate':
+        return `**MODERATE DIFFICULTY REQUIREMENTS:**
+- Test understanding and comprehension of concepts
+- Require explanation of relationships between ideas
+- Use "explain", "describe", "compare" type questions
+- Test application of knowledge to similar situations
+- Examples: "How does X relate to Y?", "Explain the process of...", "Compare and contrast..."
+- Require some analytical thinking but not complex reasoning`
+
+      case 'hard':
+        return `**HARD DIFFICULTY REQUIREMENTS:**
+- Test analysis, synthesis, and evaluation skills
+- Require connecting multiple concepts together
+- Use critical thinking and problem-solving approaches
+- Examples: "Analyze...", "Evaluate...", "Predict what would happen if...", "Justify your reasoning..."
+- Test ability to apply knowledge to new or complex scenarios`
+
+      case 'veryhard':
+        return `**VERY HARD DIFFICULTY REQUIREMENTS:**
+- Test creation, design, and advanced critical thinking
+- Require synthesis of multiple complex concepts
+- Use open-ended, creative problem solving
+- Examples: "Design a solution for...", "Create a plan to...", "Critique the effectiveness of..."
+- Test highest levels of cognitive processing and original thinking`
+
+      default:
+        return `**DIFFICULTY REQUIREMENTS:**
+- Match the specified difficulty level accurately
+- Ensure cognitive load appropriate for level`
+    }
+  }
+
+  /**
+   * Build difficulty-specific examples
+   */
+  private buildDifficultyExamples(difficulty: string, selectedTypes: Array<{ type: string; count: number }>): string {
+    const examples: string[] = []
+
+    for (const { type } of selectedTypes) {
+      const example = this.getDifficultyExample(difficulty.toLowerCase(), type)
+      if (example) {
+        examples.push(example)
+      }
+    }
+
+    return examples.length > 0 ? 
+      `**DIFFICULTY-SPECIFIC EXAMPLES:**\n\n${examples.join('\n\n')}` : 
+      ''
+  }
+
+  /**
+   * Get specific example for difficulty and question type
+   */
+  private getDifficultyExample(difficulty: string, type: string): string {
+    const difficultyKey = difficulty.toLowerCase()
+    const typeKey = type.toLowerCase()
+
+    // Example matrix for different combinations
+    const examples: Record<string, Record<string, string>> = {
+      'easy': {
+        'multiplechoice': `EASY Multiple Choice Example:
+1. What is photosynthesis?
+   A. Process where plants make food using sunlight
+   B. Process where animals digest food
+   C. Process where water evaporates
+   D. Process where rocks form crystals`,
+        
+        'truefalse': `EASY True/False Example:
+1. Photosynthesis occurs in plant leaves.`,
+
+        'fillintheblank': `EASY Fill-in-the-Blank Example:
+1. The process by which plants make food using sunlight is called _____.`
+      },
+
+      'moderate': {
+        'multiplechoice': `MODERATE Multiple Choice Example:
+1. How does the Calvin cycle contribute to photosynthesis?
+   A. It captures light energy for the process
+   B. It converts CO2 into glucose using ATP and NADPH
+   C. It produces oxygen as a byproduct
+   D. It transports water through the plant`,
+
+        'shortanswer': `MODERATE Short Answer Example:
+1. Explain how light-dependent and light-independent reactions work together in photosynthesis.`
+      },
+
+      'hard': {
+        'multiplechoice': `HARD Multiple Choice Example:
+1. If a plant's stomata remained closed during the day due to drought stress, which aspect of photosynthesis would be most directly affected?
+   A. Light absorption by chlorophyll
+   B. CO2 availability for the Calvin cycle
+   C. Water transport through xylem
+   D. ATP synthesis in thylakoids`,
+
+        'essay': `HARD Essay Example:
+1. Analyze the relationship between environmental factors (light intensity, CO2 concentration, temperature) and the rate of photosynthesis. Predict how climate change might affect global photosynthetic productivity.`
+      }
+    }
+
+    return examples[difficultyKey]?.[typeKey] || ''
+  }
+
+  /**
+   * Build critical constraints for end-of-prompt positioning
+   * REPOSITIONED: Critical constraints now appear at end of prompt for maximum LLM attention
+   */
+  private buildCriticalConstraints(): string {
+    return `**🚨 ABSOLUTE CRITICAL CONSTRAINTS - FINAL CHECK BEFORE OUTPUT 🚨**
+
+⛔ **MULTIPLE CHOICE RULE (MOST IMPORTANT):**
+- Use "All of the above" MAXIMUM 1 time in your entire response
+- Use "None of the above" MAXIMUM 1 time in your entire response  
+- This applies to ALL multiple choice questions regardless of batch size
+- If you have already used these once, DO NOT use them again
+
+⛔ **FILL-IN-THE-BLANK FORMAT (CRITICAL):**
+- Use ONLY single underscores: _____
+- NO commas, semicolons, or CSV format
+- Write as clean sentences: "The result is _____." NOT "The result is, _____, which shows"
+- Each blank should be exactly 5 underscores
+
+⛔ **REPETITION ELIMINATION:**
+- Each question MUST test a completely different concept/fact
+- NO similar wording between questions
+- NO testing the same information in different ways
+- Every question must be 100% unique
+
+⛔ **EXACT FORMAT COMPLIANCE:**
+- Output ONLY exam content - no meta-text or instructions
+- Use specified format exactly - no deviations
+- Start with "General Topic:" immediately
+
+⛔ **SOURCE FIDELITY:**
+- Base answers ONLY on explicitly stated material
+- NO external knowledge or assumptions
+- NO inferences beyond what's written`
+  }
+
+  /**
+   * Build enhanced prompt with negative constraints
+   * FIXED: Critical constraints moved to end for better LLM attention
+   */
+  private buildEnhancedPrompt(
     selectedTypes: Array<{ type: string; count: number }>,
     formatSections: string,
     typeSpecificRules: string,
     difficultyText: string,
     config: ExamGenerationConfig,
-    truncatedSource: string
+    truncatedSource: string,
+    isSpecialized: boolean
   ): string {
     const questionTypeSummary = selectedTypes
       .map(({ type, count }) => {
@@ -410,6 +640,13 @@ ${startNumber}. Sample question for ${type}
         return `  - ${capitalized}: ${count} question(s)`
       })
       .join('\n')
+
+    const specializationNote = isSpecialized ? 
+      '\n**🎯 SPECIALIZED MODE:** All questions are at the same difficulty level. Focus on consistency within this level.' :
+      ''
+
+    // Build critical constraints separately for end positioning
+    const criticalConstraints = this.buildCriticalConstraints()
 
     return `You are an expert educational assessment creator. Your task is to generate a high-quality exam that accurately evaluates student understanding of the provided study material.
 
@@ -427,6 +664,8 @@ ${startNumber}. Sample question for ${type}
    - **Very Hard:** Critical evaluation, creation of new solutions, advanced reasoning and application
 
 4. **COMPREHENSIVE COVERAGE:** Distribute questions evenly across all major topics/sections in the study material. Avoid clustering questions on only one topic.
+
+${specializationNote}
 
 ${typeSpecificRules}
 
@@ -479,6 +718,7 @@ ${truncatedSource}
 - ✓ Questions distributed across all major topics
 - ✓ Correct answers are clearly supported by source text
 - ✓ Format followed exactly
+- ✓ NO repetition or similar questions
 - ✓ ONLY generate the question types specified above
 
 **CRITICAL:** 
@@ -487,9 +727,121 @@ ${truncatedSource}
 - START immediately with "General Topic:" and follow the format exactly
 - ONLY output the actual exam content and answer key
 
+${criticalConstraints}
+
 **OUTPUT:**`
   }
 
+  /**
+   * Build difficulty-focused prompt for specialized generation
+   * FIXED: Critical constraints repositioned to end for better LLM attention
+   */
+  private buildDifficultyFocusedPrompt(
+    selectedTypes: Array<{ type: string; count: number }>,
+    formatSections: string,
+    typeSpecificRules: string,
+    _difficultyText: string,
+    difficulty: string,
+    difficultySpecificRules: string,
+    difficultyExamples: string,
+    config: ExamGenerationConfig,
+    truncatedSource: string
+  ): string {
+    const questionTypeSummary = selectedTypes
+      .map(({ type, count }) => {
+        const readable = type.replace(/([A-Z])/g, ' $1').trim()
+        const capitalized = readable.charAt(0).toUpperCase() + readable.slice(1)
+        return `  - ${capitalized}: ${count} question(s)`
+      })
+      .join('\n')
+
+    const difficultyLevel = difficulty.charAt(0).toUpperCase() + difficulty.slice(1)
+    const criticalConstraints = this.buildCriticalConstraints()
+
+    return `You are an expert educational assessment creator specializing in ${difficultyLevel}-level questions. Your task is to generate ONLY ${difficultyLevel} difficulty questions that accurately test student understanding.
+
+**🎯 SPECIALIZED ${difficultyLevel.toUpperCase()} DIFFICULTY MODE**
+
+**PRIMARY OBJECTIVE:** Generate ${config.totalQuestions} high-quality questions that are ALL at the ${difficultyLevel} difficulty level.
+
+${difficultySpecificRules}
+
+**CRITICAL QUALITY REQUIREMENTS:**
+
+1. **DIFFICULTY CONSISTENCY:** Every single question must be at the ${difficultyLevel} level. NO mixing of difficulty levels.
+
+2. **UNIQUENESS & NO REPETITION:** Each question must test a DIFFERENT concept, fact, or skill at the ${difficultyLevel} level. No two questions should test the same information in different ways.
+
+3. **SOURCE FIDELITY:** Base questions STRICTLY on information explicitly stated in the study material. Do NOT infer, assume, or add external knowledge.
+
+4. **COMPREHENSIVE COVERAGE:** Distribute questions evenly across all major topics/sections in the study material. Avoid clustering questions on only one topic.
+
+${difficultyExamples}
+
+${typeSpecificRules}
+
+**STRICT FORMATTING REQUIREMENTS:**
+- Generate ONLY the exam content - no introductions, explanations, or suggestions
+- Follow the format below EXACTLY - character for character
+- Number questions sequentially (1, 2, 3, etc.) across ALL types
+- Group questions by type as specified
+
+**EXACT OUTPUT FORMAT:**
+
+General Topic: [Extract the main subject/topic from the study material]
+
+----Exam Content----
+
+${formatSections}
+
+[PAGE BREAK]
+
+----Answer Key----
+
+1. [Answer]
+2. [Answer]
+[Continue for all questions sequentially...]
+
+**GENERATION REQUIREMENTS:**
+
+Target Difficulty: ${difficultyLevel} (ALL questions must be this level)
+Question Types & Quantities:
+${questionTypeSummary}
+
+Total Questions: ${config.totalQuestions}
+
+**CONTENT ANALYSIS REQUIREMENTS:**
+Before generating questions, mentally identify:
+1. Major topics/concepts suitable for ${difficultyLevel}-level questioning
+2. Key facts, definitions, and relationships that can be tested at ${difficultyLevel} level
+3. Ensure balanced coverage across topics while maintaining ${difficultyLevel} difficulty
+4. No topic should have more than ${Math.ceil(config.totalQuestions / 3)} questions
+
+**STUDY MATERIAL:**
+${truncatedSource}
+
+**${difficultyLevel.toUpperCase()} QUALITY CHECKLIST - Verify before submitting:**
+- ✓ ALL questions are at ${difficultyLevel} difficulty level
+- ✓ Each question tests a unique concept/fact at ${difficultyLevel} level
+- ✓ All questions strictly based on provided material
+- ✓ Questions distributed across all major topics
+- ✓ Correct answers are clearly supported by source text
+- ✓ Format followed exactly
+- ✓ NO repetition or similar questions
+- ✓ ONLY generate the question types specified above
+- ✓ Cognitive demands match ${difficultyLevel} level exactly
+
+**CRITICAL:** 
+- DO NOT include any instructional text in your output
+- DO NOT include phrases like "Continue with", "Generate all", or any parenthetical instructions
+- START immediately with "General Topic:" and follow the format exactly
+- ONLY output the actual exam content and answer key
+- MAINTAIN ${difficultyLevel} difficulty throughout
+
+${criticalConstraints}
+
+**OUTPUT:**`
+  }
 
   /**
    * Generate exam using custom prompt (for optimization testing)

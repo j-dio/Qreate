@@ -1,15 +1,16 @@
 /**
  * Exam Quality Validator Service
  *
- * Post-generation quality validation service that ensures high-quality exams
- * by checking for uniqueness, accuracy, and proper difficulty distribution.
+ * Enhanced post-generation quality validation service with batch-aware deduplication.
  *
  * Key Features:
- * - Semantic deduplication using text similarity algorithms
- * - Source verification against original material  
- * - Difficulty level accuracy checking
- * - Quality scoring and validation metrics
+ * - Advanced semantic deduplication with cross-batch awareness
+ * - Real-time duplicate detection during batch processing
+ * - Enhanced source verification against original material  
+ * - Difficulty level accuracy checking with specialized validation
+ * - Progressive quality scoring and validation metrics
  * - Auto-retry recommendations for poor quality
+ * - Batch-specific quality tracking and reporting
  *
  * This is a universal validator that works across all subjects and disciplines.
  */
@@ -23,6 +24,7 @@ export interface QualityValidationConfig {
   // Similarity thresholds
   duplicateThreshold: number // 0.0-1.0, questions above this similarity are considered duplicates
   conceptSimilarityThreshold: number // 0.0-1.0, concepts above this are too similar
+  strictDuplicateThreshold: number // 0.0-1.0, stricter threshold for cross-batch validation
   
   // Source verification settings
   sourceVerificationEnabled: boolean
@@ -31,11 +33,17 @@ export interface QualityValidationConfig {
   // Difficulty validation settings
   difficultyValidationEnabled: boolean
   difficultyTolerancePercent: number // Allow small variations in difficulty distribution
+  specializedDifficultyValidation: boolean // Enhanced validation for single-difficulty batches
   
   // Quality thresholds
   minimumQualityScore: number // 0.0-1.0, exams below this should be regenerated
   retryOnLowQuality: boolean
   maxRetryAttempts: number
+  
+  // Batch-aware settings
+  crossBatchValidation: boolean // Enable validation across batches
+  batchQualityTracking: boolean // Track quality progression across batches
+  earlyTerminationEnabled: boolean // Stop generation if quality drops too low
 }
 
 /**
@@ -60,7 +68,45 @@ export interface QuestionValidationResult {
 }
 
 /**
- * Overall Exam Validation Result
+ * Batch Validation Result
+ */
+export interface BatchValidationResult {
+  batchId: string
+  batchIndex: number
+  isValid: boolean
+  qualityScore: number // 0.0-1.0
+  questionsValidated: number
+  duplicatesFound: number
+  crossBatchDuplicates: number
+  sourceIssues: number
+  difficultyIssues: number
+  
+  recommendations: {
+    shouldRetryBatch: boolean
+    improvements: string[]
+    continueGeneration: boolean
+  }
+  
+  progressiveMetrics: {
+    qualityTrend: 'improving' | 'declining' | 'stable'
+    cumulativeDuplicates: number
+    averageQualityScore: number
+  }
+}
+
+/**
+ * Real-time Duplicate Detection Result
+ */
+export interface DuplicateCheckResult {
+  isDuplicate: boolean
+  duplicateOf?: string
+  similarityScore: number
+  duplicateType: 'exact' | 'semantic' | 'conceptual'
+  recommendation: 'reject' | 'accept' | 'modify'
+}
+
+/**
+ * Overall Exam Validation Result (Enhanced)
  */
 export interface ExamValidationResult {
   isValid: boolean
@@ -72,11 +118,13 @@ export interface ExamValidationResult {
   difficultyIssues: number
   
   questionResults: QuestionValidationResult[]
+  batchResults?: BatchValidationResult[] // Track batch-by-batch results
   
   recommendations: {
     shouldRegenerate: boolean
     improvements: string[]
     retryWithPromptChanges?: string[]
+    batchSpecificFeedback?: string[]
   }
   
   metrics: {
@@ -84,22 +132,37 @@ export interface ExamValidationResult {
     accuracyScore: number // 0.0-1.0
     difficultyScore: number // 0.0-1.0
     coverageScore: number // 0.0-1.0
+    batchConsistencyScore?: number // 0.0-1.0, consistency across batches
   }
 }
 
 /**
- * Default Quality Validation Configuration
+ * Default Quality Validation Configuration (Enhanced)
  */
 const DEFAULT_CONFIG: QualityValidationConfig = {
+  // Enhanced similarity detection
   duplicateThreshold: 0.85, // 85% similarity considered duplicate
   conceptSimilarityThreshold: 0.75, // 75% concept similarity too similar
+  strictDuplicateThreshold: 0.90, // 90% similarity for cross-batch validation (stricter)
+  
+  // Source verification
   sourceVerificationEnabled: true,
   strictSourceChecking: false, // Allow paraphrasing of source material
+  
+  // Difficulty validation
   difficultyValidationEnabled: true,
   difficultyTolerancePercent: 0.2, // Allow 20% variance in difficulty distribution
+  specializedDifficultyValidation: true, // Enhanced validation for single-difficulty batches
+  
+  // Quality thresholds
   minimumQualityScore: 0.7, // 70% quality threshold
   retryOnLowQuality: true,
   maxRetryAttempts: 2,
+  
+  // Batch-aware features
+  crossBatchValidation: true, // Enable validation across batches
+  batchQualityTracking: true, // Track quality progression across batches
+  earlyTerminationEnabled: true, // Stop generation if quality drops too low
 }
 
 /**
@@ -122,9 +185,15 @@ export class ExamQualityValidator {
   private sourceText: string
   private config: QualityValidationConfig
   private wordCache: Map<string, string[]> = new Map()
+  
+  // Enhanced state for batch-aware validation
+  private allValidatedQuestions: GeneratedQuestion[] = []
+  private batchResults: BatchValidationResult[] = []
+  private questionFingerprints: Map<string, GeneratedQuestion> = new Map()
+  private qualityTrendHistory: number[] = []
 
   /**
-   * Initialize validator
+   * Initialize enhanced validator with batch awareness
    * 
    * @param sourceText - Original source material for verification
    * @param config - Validation configuration (optional)
@@ -132,6 +201,168 @@ export class ExamQualityValidator {
   constructor(sourceText: string, config?: Partial<QualityValidationConfig>) {
     this.sourceText = sourceText.toLowerCase()
     this.config = { ...DEFAULT_CONFIG, ...config }
+    
+    // Initialize batch tracking state
+    this.allValidatedQuestions = []
+    this.batchResults = []
+    this.questionFingerprints.clear()
+    this.qualityTrendHistory = []
+  }
+
+  /**
+   * Reset validator state for new generation session
+   */
+  public resetForNewSession(): void {
+    this.allValidatedQuestions = []
+    this.batchResults = []
+    this.questionFingerprints.clear()
+    this.qualityTrendHistory = []
+    this.wordCache.clear()
+    
+    console.log('[ExamQualityValidator] Reset for new generation session')
+  }
+
+  /**
+   * Real-time duplicate check against all previously validated questions
+   * 
+   * @param question - New question to check
+   * @returns Duplicate detection result with recommendation
+   */
+  public checkForRealTimeDuplicates(question: GeneratedQuestion): DuplicateCheckResult {
+    if (!this.config.crossBatchValidation) {
+      return { 
+        isDuplicate: false, 
+        similarityScore: 0, 
+        duplicateType: 'exact',
+        recommendation: 'accept'
+      }
+    }
+
+    const questionFingerprint = this.createAdvancedQuestionFingerprint(question)
+    
+    // Check against all previously validated questions
+    for (const [, existingQuestion] of this.questionFingerprints) {
+      const similarity = this.calculateAdvancedSimilarity(question, existingQuestion)
+      
+      if (similarity > this.config.strictDuplicateThreshold) {
+        console.log(`[ExamQualityValidator] Real-time duplicate detected: ${similarity.toFixed(3)} similarity`)
+        
+        return {
+          isDuplicate: true,
+          duplicateOf: existingQuestion.id,
+          similarityScore: similarity,
+          duplicateType: similarity > 0.95 ? 'exact' : 'semantic',
+          recommendation: 'reject'
+        }
+      } else if (similarity > this.config.conceptSimilarityThreshold) {
+        return {
+          isDuplicate: true,
+          duplicateOf: existingQuestion.id,
+          similarityScore: similarity,
+          duplicateType: 'conceptual',
+          recommendation: 'modify'
+        }
+      }
+    }
+
+    // Add to fingerprint tracking
+    this.questionFingerprints.set(questionFingerprint, question)
+    
+    return { 
+      isDuplicate: false, 
+      similarityScore: 0,
+      duplicateType: 'exact',
+      recommendation: 'accept'
+    }
+  }
+
+  /**
+   * Validate a batch of questions with progressive quality tracking
+   * 
+   * @param questions - Questions from current batch
+   * @param batchId - Unique identifier for this batch
+   * @param batchIndex - Index of this batch in the generation sequence
+   * @returns Batch validation result with quality metrics
+   */
+  public validateBatch(questions: GeneratedQuestion[], batchId: string, batchIndex: number): BatchValidationResult {
+    console.log(`[ExamQualityValidator] Validating batch ${batchIndex + 1} with ${questions.length} questions`)
+
+    let duplicatesFound = 0
+    let crossBatchDuplicates = 0
+    let sourceIssues = 0
+    let difficultyIssues = 0
+    let totalQualityScore = 0
+
+    // Validate each question in the batch
+    for (const question of questions) {
+      // Check for duplicates within batch
+      const withinBatchDuplicate = this.checkWithinBatchDuplicates(question, questions)
+      if (withinBatchDuplicate) duplicatesFound++
+
+      // Check for cross-batch duplicates
+      const crossBatchCheck = this.checkForRealTimeDuplicates(question)
+      if (crossBatchCheck.isDuplicate) crossBatchDuplicates++
+
+      // Validate source fidelity
+      if (this.config.sourceVerificationEnabled) {
+        const sourceIssue = this.verifyAgainstSource(question)
+        if (sourceIssue) sourceIssues++
+      }
+
+      // Validate difficulty
+      if (this.config.difficultyValidationEnabled) {
+        const difficultyIssue = this.validateDifficulty(question)
+        if (difficultyIssue) difficultyIssues++
+      }
+
+      // Calculate individual question quality
+      const qualityScore = this.calculateQuestionQualityScore(question)
+      totalQualityScore += qualityScore
+
+      // Add to global tracking
+      this.allValidatedQuestions.push(question)
+    }
+
+    const averageQualityScore = totalQualityScore / questions.length
+    this.qualityTrendHistory.push(averageQualityScore)
+
+    const qualityTrend = this.determineQualityTrend()
+    const isValid = averageQualityScore >= this.config.minimumQualityScore && 
+                   crossBatchDuplicates <= Math.ceil(questions.length * 0.1) // Allow up to 10% cross-batch duplicates
+
+    const batchResult: BatchValidationResult = {
+      batchId,
+      batchIndex,
+      isValid,
+      qualityScore: averageQualityScore,
+      questionsValidated: questions.length,
+      duplicatesFound,
+      crossBatchDuplicates,
+      sourceIssues,
+      difficultyIssues,
+      recommendations: {
+        shouldRetryBatch: !isValid && this.config.retryOnLowQuality,
+        improvements: this.generateBatchImprovements(duplicatesFound, crossBatchDuplicates, sourceIssues, difficultyIssues),
+        continueGeneration: this.shouldContinueGeneration(qualityTrend, averageQualityScore)
+      },
+      progressiveMetrics: {
+        qualityTrend,
+        cumulativeDuplicates: this.getTotalDuplicates(),
+        averageQualityScore: this.getOverallAverageQuality()
+      }
+    }
+
+    this.batchResults.push(batchResult)
+
+    console.log(`[ExamQualityValidator] Batch ${batchIndex + 1} validation complete:`, {
+      valid: isValid,
+      quality: averageQualityScore.toFixed(3),
+      duplicates: duplicatesFound,
+      crossBatch: crossBatchDuplicates,
+      trend: qualityTrend
+    })
+
+    return batchResult
   }
 
   /**
@@ -689,5 +920,194 @@ export class ExamQualityValidator {
       improvements,
       retryWithPromptChanges: retryPromptChanges.length > 0 ? retryPromptChanges : undefined,
     }
+  }
+
+  /**
+   * Create an advanced fingerprint for more accurate duplicate detection
+   */
+  private createAdvancedQuestionFingerprint(question: GeneratedQuestion): string {
+    // Include question type, core concepts, and answer pattern
+    const questionWords = this.getWordsFromText(question.question)
+    const coreWords = questionWords.slice(0, 5).join(' ') // First 5 meaningful words
+    
+    // Include answer signature for MC questions
+    let answerSignature = ''
+    if (question.type === 'multipleChoice' && question.options) {
+      answerSignature = question.options.map(opt => opt.substring(0, 10)).join('|')
+    }
+    
+    return `${question.type}:${question.difficulty}:${coreWords}:${answerSignature}`
+  }
+
+  /**
+   * Calculate advanced similarity between two questions
+   */
+  private calculateAdvancedSimilarity(question1: GeneratedQuestion, question2: GeneratedQuestion): number {
+    // Different question types are less similar
+    if (question1.type !== question2.type) {
+      return this.calculateTextSimilarity(
+        this.getWordsFromText(question1.question),
+        this.getWordsFromText(question2.question)
+      ) * 0.7 // Reduce similarity for different types
+    }
+
+    // Same type questions - full similarity calculation
+    const textSimilarity = this.calculateTextSimilarity(
+      this.getWordsFromText(question1.question),
+      this.getWordsFromText(question2.question)
+    )
+
+    // For multiple choice, also consider option similarity
+    if (question1.type === 'multipleChoice' && question1.options && question2.options) {
+      const optionSimilarity = this.calculateOptionSimilarity(question1.options, question2.options)
+      return (textSimilarity * 0.7) + (optionSimilarity * 0.3)
+    }
+
+    return textSimilarity
+  }
+
+  /**
+   * Calculate similarity between multiple choice options
+   */
+  private calculateOptionSimilarity(options1: string[], options2: string[]): number {
+    if (!options1 || !options2) return 0
+
+    let totalSimilarity = 0
+    let comparisons = 0
+
+    for (const option1 of options1) {
+      for (const option2 of options2) {
+        const similarity = this.calculateTextSimilarity(
+          this.getWordsFromText(option1),
+          this.getWordsFromText(option2)
+        )
+        totalSimilarity += similarity
+        comparisons++
+      }
+    }
+
+    return comparisons > 0 ? totalSimilarity / comparisons : 0
+  }
+
+  /**
+   * Check for duplicates within the current batch
+   */
+  private checkWithinBatchDuplicates(question: GeneratedQuestion, batchQuestions: GeneratedQuestion[]): boolean {
+    const currentIndex = batchQuestions.indexOf(question)
+    if (currentIndex === -1) return false
+
+    const questionWords = this.getWordsFromText(question.question)
+
+    for (let i = 0; i < currentIndex; i++) {
+      const otherQuestion = batchQuestions[i]
+      const otherWords = this.getWordsFromText(otherQuestion.question)
+      
+      const similarity = this.calculateTextSimilarity(questionWords, otherWords)
+      
+      if (similarity > this.config.duplicateThreshold) {
+        return true
+      }
+    }
+
+    return false
+  }
+
+  /**
+   * Calculate individual question quality score
+   */
+  private calculateQuestionQualityScore(question: GeneratedQuestion): number {
+    let score = 1.0
+
+    // Penalize for common quality issues
+    const qualityIssues = this.performQualityChecks(question)
+    score -= (qualityIssues.length * 0.1)
+
+    // Reward proper question structure
+    if (question.question.length >= 20 && question.question.length <= 150) {
+      score += 0.1 // Good length
+    }
+
+    // Reward for proper punctuation
+    if (question.question.trim().endsWith('?') || question.question.includes('_')) {
+      score += 0.05
+    }
+
+    return Math.max(0, Math.min(1, score))
+  }
+
+  /**
+   * Determine quality trend across batches
+   */
+  private determineQualityTrend(): 'improving' | 'declining' | 'stable' {
+    if (this.qualityTrendHistory.length < 2) return 'stable'
+
+    const recent = this.qualityTrendHistory.slice(-3) // Last 3 batches
+    const earlier = this.qualityTrendHistory.slice(-6, -3) // Previous 3 batches
+
+    if (earlier.length === 0) return 'stable'
+
+    const recentAvg = recent.reduce((sum, score) => sum + score, 0) / recent.length
+    const earlierAvg = earlier.reduce((sum, score) => sum + score, 0) / earlier.length
+
+    const difference = recentAvg - earlierAvg
+
+    if (difference > 0.05) return 'improving'
+    if (difference < -0.05) return 'declining'
+    return 'stable'
+  }
+
+  /**
+   * Generate batch-specific improvement recommendations
+   */
+  private generateBatchImprovements(duplicates: number, crossBatchDuplicates: number, sourceIssues: number, difficultyIssues: number): string[] {
+    const improvements: string[] = []
+
+    if (duplicates > 0) {
+      improvements.push(`Reduce within-batch repetition (${duplicates} duplicates found)`)
+    }
+
+    if (crossBatchDuplicates > 0) {
+      improvements.push(`Improve cross-batch uniqueness (${crossBatchDuplicates} cross-batch duplicates found)`)
+    }
+
+    if (sourceIssues > 0) {
+      improvements.push(`Improve source fidelity (${sourceIssues} questions not well-supported by material)`)
+    }
+
+    if (difficultyIssues > 0) {
+      improvements.push(`Improve difficulty accuracy (${difficultyIssues} questions have incorrect difficulty)`)
+    }
+
+    return improvements
+  }
+
+  /**
+   * Determine if generation should continue based on quality trends
+   */
+  private shouldContinueGeneration(trend: 'improving' | 'declining' | 'stable', currentScore: number): boolean {
+    if (!this.config.earlyTerminationEnabled) return true
+
+    // Stop if quality is declining rapidly
+    if (trend === 'declining' && currentScore < 0.5) {
+      return false
+    }
+
+    // Continue in all other cases
+    return true
+  }
+
+  /**
+   * Get total duplicates across all batches
+   */
+  private getTotalDuplicates(): number {
+    return this.batchResults.reduce((total, batch) => total + batch.duplicatesFound + batch.crossBatchDuplicates, 0)
+  }
+
+  /**
+   * Get overall average quality across all batches
+   */
+  private getOverallAverageQuality(): number {
+    if (this.qualityTrendHistory.length === 0) return 0
+    return this.qualityTrendHistory.reduce((sum, score) => sum + score, 0) / this.qualityTrendHistory.length
   }
 }
