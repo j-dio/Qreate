@@ -60,9 +60,11 @@ export interface ExamGenerationConfig {
  */
 const GROQ_CONFIG = {
   model: 'llama-3.3-70b-versatile',
-  maxTokens: 32768, // Increased for 100+ questions (llama-3.3-70b supports up to 128k)
-  temperature: 0.7, // Balanced creativity and consistency
+  maxTokens: 16384, // Optimized for typical 50-100 question exams (down from 32768)
+  temperature: 0.7, // Balanced creativity and consistency (proven stable)
   topP: 0.9,
+  frequencyPenalty: 0.5, // Prevents repetition loops (anti "Hox genes" repetition)
+  presencePenalty: 0.3, // Encourages topic diversity across questions
 } as const
 
 /**
@@ -192,6 +194,8 @@ export class GroqProvider {
           max_tokens: GROQ_CONFIG.maxTokens,
           temperature: GROQ_CONFIG.temperature,
           top_p: GROQ_CONFIG.topP,
+          frequency_penalty: GROQ_CONFIG.frequencyPenalty,
+          presence_penalty: GROQ_CONFIG.presencePenalty,
         })
 
         const examContent = completion.choices[0]?.message?.content
@@ -926,6 +930,8 @@ ${criticalConstraints}
         max_tokens: GROQ_CONFIG.maxTokens,
         temperature: GROQ_CONFIG.temperature,
         top_p: GROQ_CONFIG.topP,
+        frequency_penalty: GROQ_CONFIG.frequencyPenalty,
+        presence_penalty: GROQ_CONFIG.presencePenalty,
       })
 
       const examContent = completion.choices[0]?.message?.content
