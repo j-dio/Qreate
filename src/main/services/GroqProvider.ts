@@ -56,34 +56,118 @@ export interface ExamGenerationConfig {
 }
 
 /**
- * Groq Provider Configuration
+ * Available Groq Models with Specializations
  */
-const GROQ_CONFIG = {
-  model: 'llama-3.3-70b-versatile',
-  maxTokens: 16384, // Optimized for typical 50-100 question exams (down from 32768)
-  temperature: 0.7, // Balanced creativity and consistency (proven stable)
-  topP: 0.9,
-  frequencyPenalty: 0.5, // Prevents repetition loops (anti "Hox genes" repetition)
-  presencePenalty: 0.3, // Encourages topic diversity across questions
+export type GroqModelType = 
+  | 'gpt-oss-120b'           // Best reasoning, structured outputs, chain-of-thought
+  | 'gpt-oss-20b'            // Efficient reasoning, often outperforms 120B
+  | 'qwen-3-32b'             // Strong reasoning, multilingual support
+  | 'llama-3.3-70b-versatile' // Legacy model, general purpose
+  | 'mixtral-8x7b-32768'     // Fast inference, mixture of experts
+
+/**
+ * Model-specific configurations optimized for quiz generation
+ */
+const MODEL_CONFIGS: Record<GroqModelType, {
+  maxTokens: number
+  temperature: number
+  topP: number
+  frequencyPenalty: number
+  presencePenalty: number
+  description: string
+  strengths: string[]
+}> = {
+  'gpt-oss-120b': {
+    maxTokens: 16384,
+    temperature: 0.6, // Lower for more focused reasoning
+    topP: 0.85,
+    frequencyPenalty: 0.6, // Higher to prevent repetition
+    presencePenalty: 0.4,  // Encourage concept diversity
+    description: 'Premier reasoning model with structured outputs and chain-of-thought',
+    strengths: ['Superior reasoning', 'Format compliance', 'Mathematical problems', 'Complex analysis']
+  },
+  'gpt-oss-20b': {
+    maxTokens: 16384,
+    temperature: 0.6, // Lower for focused output
+    topP: 0.85,
+    frequencyPenalty: 0.6,
+    presencePenalty: 0.4,
+    description: 'Efficient reasoning model, often outperforms larger models',
+    strengths: ['Efficient reasoning', 'Fast inference', 'Strong performance-to-size ratio', 'Coding tasks']
+  },
+  'qwen-3-32b': {
+    maxTokens: 16384,
+    temperature: 0.65, // Slightly higher for creativity
+    topP: 0.9,
+    frequencyPenalty: 0.5,
+    presencePenalty: 0.35,
+    description: 'Strong reasoning with excellent multilingual capabilities',
+    strengths: ['Academic benchmarks', 'Multilingual', 'Balanced performance', 'Text comprehension']
+  },
+  'llama-3.3-70b-versatile': {
+    maxTokens: 16384,
+    temperature: 0.7, // Original proven settings
+    topP: 0.9,
+    frequencyPenalty: 0.5,
+    presencePenalty: 0.3,
+    description: 'Legacy general-purpose model (may exhibit laziness)',
+    strengths: ['General purpose', 'Large context', 'Established reliability']
+  },
+  'mixtral-8x7b-32768': {
+    maxTokens: 16384,
+    temperature: 0.65,
+    topP: 0.9,
+    frequencyPenalty: 0.55,
+    presencePenalty: 0.35,
+    description: 'Fast mixture-of-experts model with efficient inference',
+    strengths: ['6x faster than Llama', 'Complex reasoning', 'Translation', 'Summarization']
+  }
 } as const
 
 /**
- * GroqProvider - Backend-managed AI exam generation
+ * Default model selection based on environment or fallback hierarchy
+ */
+const getDefaultModel = (): GroqModelType => {
+  // Check environment variable first
+  const envModel = process.env.GROQ_PRIMARY_MODEL as GroqModelType
+  if (envModel && envModel in MODEL_CONFIGS) {
+    return envModel
+  }
+  
+  // Fallback hierarchy: Best reasoning -> Efficient -> Legacy
+  return 'gpt-oss-120b'
+}
+
+const getFallbackModel = (): GroqModelType => {
+  const envFallback = process.env.GROQ_FALLBACK_MODEL as GroqModelType
+  if (envFallback && envFallback in MODEL_CONFIGS) {
+    return envFallback
+  }
+  
+  // Safe fallback to proven model
+  return 'llama-3.3-70b-versatile'
+}
+
+/**
+ * GroqProvider - Backend-managed AI exam generation with model selection
  *
- * This class handles all communication with the Groq API.
+ * This class handles all communication with the Groq API with support for multiple models.
  * The API key is stored in environment variables and never exposed to the frontend.
  */
 export class GroqProvider {
   private client: Groq
-  private readonly model = GROQ_CONFIG.model
+  private primaryModel: GroqModelType
+  private fallbackModel: GroqModelType
+  private currentConfig: typeof MODEL_CONFIGS[GroqModelType]
 
   /**
-   * Initialize Groq client
+   * Initialize Groq client with model selection
    *
    * @param apiKey - Groq API key from environment variables
+   * @param modelOverride - Optional model override for testing
    * @throws Error if API key is missing
    */
-  constructor(apiKey: string) {
+  constructor(apiKey: string, modelOverride?: GroqModelType) {
     if (!apiKey || apiKey.trim().length === 0) {
       throw new Error('Groq API key is required. Please set GROQ_API_KEY in .env.local')
     }
@@ -91,18 +175,53 @@ export class GroqProvider {
     this.client = new Groq({
       apiKey: apiKey,
     })
+
+    // Set up model selection
+    this.primaryModel = modelOverride || getDefaultModel()
+    this.fallbackModel = getFallbackModel()
+    this.currentConfig = MODEL_CONFIGS[this.primaryModel]
+
+    console.log(`[Groq] Initialized with primary model: ${this.primaryModel}`)
+    console.log(`[Groq] Fallback model: ${this.fallbackModel}`)
+    console.log(`[Groq] Model description: ${this.currentConfig.description}`)
   }
 
   /**
-   * Test connection to Groq API
+   * Get current model information
+   */
+  getModelInfo() {
+    return {
+      primaryModel: this.primaryModel,
+      fallbackModel: this.fallbackModel,
+      config: this.currentConfig,
+      availableModels: Object.keys(MODEL_CONFIGS) as GroqModelType[]
+    }
+  }
+
+  /**
+   * Switch to a different model (useful for A/B testing)
+   */
+  switchModel(newModel: GroqModelType): boolean {
+    if (newModel in MODEL_CONFIGS) {
+      console.log(`[Groq] Switching from ${this.primaryModel} to ${newModel}`)
+      this.primaryModel = newModel
+      this.currentConfig = MODEL_CONFIGS[newModel]
+      return true
+    }
+    console.error(`[Groq] Invalid model: ${newModel}`)
+    return false
+  }
+
+  /**
+   * Test connection to Groq API with model validation
    *
-   * Makes a minimal API call to verify the service is reachable
+   * Makes a minimal API call to verify the service is reachable with selected model
    *
-   * @returns Promise with success status
+   * @returns Promise with success status and model info
    */
   async testConnection(): Promise<{ success: boolean; message: string; details?: string }> {
     try {
-      // Make a minimal test call
+      // Make a minimal test call with current model
       const completion = await this.client.chat.completions.create({
         messages: [
           {
@@ -110,9 +229,9 @@ export class GroqProvider {
             content: 'Say "test successful" if you can read this.',
           },
         ],
-        model: this.model,
+        model: this.primaryModel,
         max_tokens: 50,
-        temperature: 0.7,
+        temperature: this.currentConfig.temperature,
       })
 
       const response = completion.choices[0]?.message?.content
@@ -121,7 +240,7 @@ export class GroqProvider {
         return {
           success: true,
           message: 'Successfully connected to Groq!',
-          details: `Using model: ${this.model}`,
+          details: `Using model: ${this.primaryModel} (${this.currentConfig.description})`,
         }
       }
 
@@ -130,6 +249,39 @@ export class GroqProvider {
         message: 'No response from Groq API',
       }
     } catch (error: any) {
+      console.error(`[Groq] Test connection failed with ${this.primaryModel}:`, error.message)
+
+      // Try fallback model if primary fails
+      if (this.primaryModel !== this.fallbackModel) {
+        try {
+          console.log(`[Groq] Trying fallback model: ${this.fallbackModel}`)
+          const fallbackConfig = MODEL_CONFIGS[this.fallbackModel]
+          
+          const completion = await this.client.chat.completions.create({
+            messages: [
+              {
+                role: 'user',
+                content: 'Say "fallback test successful" if you can read this.',
+              },
+            ],
+            model: this.fallbackModel,
+            max_tokens: 50,
+            temperature: fallbackConfig.temperature,
+          })
+
+          const response = completion.choices[0]?.message?.content
+          if (response && response.length > 0) {
+            return {
+              success: true,
+              message: 'Connected using fallback model',
+              details: `Fallback model: ${this.fallbackModel} (primary ${this.primaryModel} failed)`,
+            }
+          }
+        } catch (fallbackError: any) {
+          console.error(`[Groq] Fallback model also failed:`, fallbackError.message)
+        }
+      }
+
       // Handle specific error types
       if (error.message?.includes('API key')) {
         return {
@@ -147,6 +299,14 @@ export class GroqProvider {
         }
       }
 
+      if (error.message?.includes('model')) {
+        return {
+          success: false,
+          message: 'Model not available',
+          details: `Model ${this.primaryModel} may not be accessible. Try switching models.`,
+        }
+      }
+
       return {
         success: false,
         message: 'Connection failed',
@@ -156,10 +316,10 @@ export class GroqProvider {
   }
 
   /**
-   * Generate exam using Groq with retry logic
+   * Generate exam using Groq with model fallback and retry logic
    *
    * Formats the prompt and calls Groq API to generate exam content.
-   * Includes exponential backoff retry strategy for resilience.
+   * Includes model fallback and exponential backoff retry strategy for resilience.
    *
    * @param config - Exam configuration (types, difficulty, etc.)
    * @param sourceText - Extracted text from uploaded files
@@ -169,65 +329,102 @@ export class GroqProvider {
   async generateExam(config: ExamGenerationConfig, sourceText: string): Promise<string> {
     const maxRetries = 3
     const baseDelay = 1000 // 1 second
+    let usingFallback = false
 
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        console.log(`[Groq] Exam generation attempt ${attempt}/${maxRetries}`)
+    // Try primary model first, then fallback
+    const modelsToTry = [this.primaryModel, this.fallbackModel]
+    
+    for (const modelToUse of modelsToTry) {
+      const modelConfig = MODEL_CONFIGS[modelToUse]
+      usingFallback = modelToUse === this.fallbackModel
 
-        // Build the prompt
-        const prompt = this.buildExamPrompt(config, sourceText)
+      if (usingFallback) {
+        console.log(`[Groq] Switching to fallback model: ${modelToUse}`)
+      }
 
-        // Generate content
-        const completion = await this.client.chat.completions.create({
-          messages: [
-            {
-              role: 'system',
-              content:
-                'You are an expert exam creator. Generate ONLY the exam content with no introductory text, explanations, or suggestions.',
-            },
-            {
-              role: 'user',
-              content: prompt,
-            },
-          ],
-          model: this.model,
-          max_tokens: GROQ_CONFIG.maxTokens,
-          temperature: GROQ_CONFIG.temperature,
-          top_p: GROQ_CONFIG.topP,
-          frequency_penalty: GROQ_CONFIG.frequencyPenalty,
-          presence_penalty: GROQ_CONFIG.presencePenalty,
-        })
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          console.log(`[Groq] ${usingFallback ? 'Fallback ' : ''}Exam generation attempt ${attempt}/${maxRetries} with ${modelToUse}`)
 
-        const examContent = completion.choices[0]?.message?.content
+          // Build the prompt
+          const prompt = this.buildExamPrompt(config, sourceText)
 
-        if (!examContent || examContent.trim().length === 0) {
-          throw new Error('Groq returned empty response')
+          // Generate content with model-specific configuration
+          const completion = await this.client.chat.completions.create({
+            messages: [
+              {
+                role: 'system',
+                content:
+                  'You are an expert exam creator. Generate ONLY the exam content with no introductory text, explanations, or suggestions.',
+              },
+              {
+                role: 'user',
+                content: prompt,
+              },
+            ],
+            model: modelToUse,
+            max_tokens: modelConfig.maxTokens,
+            temperature: modelConfig.temperature,
+            top_p: modelConfig.topP,
+            frequency_penalty: modelConfig.frequencyPenalty,
+            presence_penalty: modelConfig.presencePenalty,
+          })
+
+          const examContent = completion.choices[0]?.message?.content
+
+          if (!examContent || examContent.trim().length === 0) {
+            throw new Error(`${modelToUse} returned empty response`)
+          }
+
+          console.log(`[Groq] Exam generated successfully with ${modelToUse}${usingFallback ? ' (fallback)' : ''}`)
+          
+          // Update current config if we successfully used a different model
+          if (modelToUse !== this.primaryModel) {
+            console.log(`[Groq] Note: Generated with fallback model due to primary model issues`)
+          }
+          
+          return examContent
+        } catch (error: any) {
+          console.error(`[Groq] ${modelToUse} attempt ${attempt} failed:`, error.message)
+
+          // Check if it's a rate limit or model-specific error
+          const isRateLimit = error.message?.toLowerCase().includes('rate limit')
+          const isModelError = error.message?.toLowerCase().includes('model') || error.message?.toLowerCase().includes('not found')
+
+          // If model error, break to try next model
+          if (isModelError && !usingFallback) {
+            console.log(`[Groq] Model ${modelToUse} not available, trying fallback`)
+            break
+          }
+
+          // If last attempt with this model or non-retryable error, move to next model or fail
+          if (attempt === maxRetries || (!isRateLimit && attempt > 1)) {
+            if (usingFallback) {
+              // Both models failed
+              throw new Error(`Failed to generate exam with both ${this.primaryModel} and ${this.fallbackModel}: ${error.message || 'Unknown error'}`)
+            } else {
+              // Break to try fallback model
+              break
+            }
+          }
+
+          // Calculate exponential backoff delay
+          const delay = baseDelay * Math.pow(2, attempt - 1)
+          console.log(`[Groq] Retrying ${modelToUse} in ${delay}ms...`)
+
+          // Wait before retry
+          await new Promise(resolve => setTimeout(resolve, delay))
         }
+      }
 
-        console.log('[Groq] Exam generated successfully')
-        return examContent
-      } catch (error: any) {
-        console.error(`[Groq] Attempt ${attempt} failed:`, error.message)
-
-        // Check if it's a rate limit error
-        const isRateLimit = error.message?.toLowerCase().includes('rate limit')
-
-        // If last attempt or non-retryable error, throw
-        if (attempt === maxRetries || (!isRateLimit && attempt > 1)) {
-          throw new Error(`Failed to generate exam: ${error.message || 'Unknown error'}`)
-        }
-
-        // Calculate exponential backoff delay
-        const delay = baseDelay * Math.pow(2, attempt - 1)
-        console.log(`[Groq] Retrying in ${delay}ms...`)
-
-        // Wait before retry
-        await new Promise(resolve => setTimeout(resolve, delay))
+      // If we get here and we're using fallback, both models failed
+      if (usingFallback) {
+        break
       }
     }
 
     // This should never be reached, but TypeScript needs it
-    throw new Error('Failed to generate exam after all retries')
+    throw new Error('Failed to generate exam after trying all available models')
   }
 
   /**
@@ -913,7 +1110,7 @@ ${criticalConstraints}
    */
   async generateExamWithPrompt(prompt: string, _timeoutMs?: number): Promise<string> {
     try {
-      console.log('[Groq] Generating exam with custom prompt')
+      console.log(`[Groq] Generating exam with custom prompt using ${this.primaryModel}`)
 
       const completion = await this.client.chat.completions.create({
         messages: [
@@ -926,12 +1123,12 @@ ${criticalConstraints}
             content: prompt,
           },
         ],
-        model: this.model,
-        max_tokens: GROQ_CONFIG.maxTokens,
-        temperature: GROQ_CONFIG.temperature,
-        top_p: GROQ_CONFIG.topP,
-        frequency_penalty: GROQ_CONFIG.frequencyPenalty,
-        presence_penalty: GROQ_CONFIG.presencePenalty,
+        model: this.primaryModel,
+        max_tokens: this.currentConfig.maxTokens,
+        temperature: this.currentConfig.temperature,
+        top_p: this.currentConfig.topP,
+        frequency_penalty: this.currentConfig.frequencyPenalty,
+        presence_penalty: this.currentConfig.presencePenalty,
       })
 
       const examContent = completion.choices[0]?.message?.content
@@ -940,10 +1137,10 @@ ${criticalConstraints}
         throw new Error('Groq returned empty response')
       }
 
-      console.log('[Groq] Exam generated successfully with custom prompt')
+      console.log(`[Groq] Exam generated successfully with custom prompt using ${this.primaryModel}`)
       return examContent
     } catch (error: any) {
-      console.error('[Groq] Custom prompt generation failed:', error.message)
+      console.error(`[Groq] Custom prompt generation failed with ${this.primaryModel}:`, error.message)
       throw new Error(`Failed to generate exam with custom prompt: ${error.message}`)
     }
   }
