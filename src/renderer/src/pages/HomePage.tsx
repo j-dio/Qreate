@@ -24,7 +24,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAppStore } from '../store/useAppStore'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 
 interface UsageStatus {
   success: boolean
@@ -36,9 +36,12 @@ interface UsageStatus {
     totalExams: number
   }
   limits: {
-    examsPerDay: number
     examsPerWeek: number
+    dailyBurstLimit: number
     examsPerMonth: number
+    minQuestionsPerExam: number
+    maxQuestionsPerExam: number
+    rateLimitDelaySeconds: number
   }
   resetTimes: {
     dailyResetIn: number
@@ -70,7 +73,25 @@ export function HomePage() {
   })
   const [isLoadingExams, setIsLoadingExams] = useState(true)
 
-  // Load exam history and calculate real statistics
+  // Memoize date calculations to avoid recalculating on every render
+  const { startOfWeek, startOfMonth } = useMemo(() => {
+    const now = new Date()
+
+    // Get start of current week (Monday)
+    const startOfWeek = new Date(now)
+    const dayOfWeek = now.getDay() // 0 = Sunday, 1 = Monday, etc.
+    const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1 // Convert Sunday = 0 to 6 days from Monday
+    startOfWeek.setDate(now.getDate() - daysFromMonday)
+    startOfWeek.setHours(0, 0, 0, 0)
+
+    // Get start of current month
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+    startOfMonth.setHours(0, 0, 0, 0)
+
+    return { startOfWeek, startOfMonth }
+  }, []) // Only calculate once per component mount
+
+  // Load exam history and calculate real statistics (optimized single IPC call)
   const loadExamHistory = useCallback(async () => {
     if (!sessionToken || !user) {
       setIsLoadingExams(false)
@@ -79,39 +100,27 @@ export function HomePage() {
 
     try {
       setIsLoadingExams(true)
-      
-      // Get ALL exams for statistics (no limit)
+
+      // Get ALL exams in a single IPC call (more efficient)
       const allExamsResponse = await window.electron.getExamHistory(sessionToken)
-      // Get recent exams for display (limit 10)
-      const recentExamsResponse = await window.electron.getExamHistory(sessionToken, 10)
 
-      if (allExamsResponse.success && allExamsResponse.exams && recentExamsResponse.success && recentExamsResponse.exams) {
-        setRecentExams(recentExamsResponse.exams)
+      if (allExamsResponse.success && allExamsResponse.exams) {
+        const allExams = allExamsResponse.exams
 
-        // Calculate statistics using ALL exams
-        const now = new Date()
-        
-        // Get start of current week (Monday)
-        const startOfWeek = new Date(now)
-        const dayOfWeek = now.getDay() // 0 = Sunday, 1 = Monday, etc.
-        const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1 // Convert Sunday = 0 to 6 days from Monday
-        startOfWeek.setDate(now.getDate() - daysFromMonday)
-        startOfWeek.setHours(0, 0, 0, 0)
-        
-        // Get start of current month
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-        startOfMonth.setHours(0, 0, 0, 0)
+        // Set recent exams (first 10)
+        setRecentExams(allExams.slice(0, 10))
 
-        const thisWeekExams = allExamsResponse.exams.filter(
+        // Calculate statistics using memoized date boundaries
+        const thisWeekExams = allExams.filter(
           (exam: ExamRecord) => new Date(exam.created_at) >= startOfWeek
         ).length
 
-        const thisMonthExams = allExamsResponse.exams.filter(
+        const thisMonthExams = allExams.filter(
           (exam: ExamRecord) => new Date(exam.created_at) >= startOfMonth
         ).length
 
         setExamStats({
-          total: allExamsResponse.exams.length,
+          total: allExams.length,
           thisWeek: thisWeekExams,
           thisMonth: thisMonthExams,
         })
@@ -121,13 +130,13 @@ export function HomePage() {
     } finally {
       setIsLoadingExams(false)
     }
-  }, [sessionToken, user])
+  }, [sessionToken, user, startOfWeek, startOfMonth])
 
-  // Fetch usage status and exam history on mount
+  // Fetch usage status
   useEffect(() => {
-    const fetchUsageStatus = async () => {
-      if (!user) return
+    if (!user) return
 
+    const fetchUsageStatus = async () => {
       try {
         const result = await window.electron.groq.getUsageStatus(parseInt(user.id))
         if (result.success) {
@@ -139,21 +148,25 @@ export function HomePage() {
     }
 
     fetchUsageStatus()
+  }, [user])
+
+  // Load exam history (separate useEffect to prevent dependency loops)
+  useEffect(() => {
     loadExamHistory()
-  }, [user, loadExamHistory])
+  }, [loadExamHistory])
 
   return (
     <div className="space-y-8">
       {/* Welcome Section */}
       <div>
-        <h2 className="text-3xl font-bold tracking-tight">
-          Welcome{user ? `, ${user.name}` : ' to Qreate'}!
+        <h2 className="text-3xl font-bold tracking-tight min-h-[2.5rem]">
+          {user ? `Welcome, ${user.name}!` : 'Welcome to Qreate!'}
         </h2>
         <p className="text-muted-foreground">Create AI-powered exams from your study materials</p>
       </div>
 
       {/* Usage Quota Banner */}
-      {usageStatus && (
+      {usageStatus ? (
         <Card className="border-green-200 bg-green-50">
           <CardContent className="flex items-center justify-between p-6">
             <div className="flex items-start gap-4">
@@ -162,28 +175,53 @@ export function HomePage() {
                 <h3 className="text-lg font-semibold text-green-900">Free AI Exam Generation</h3>
                 <p className="text-sm text-green-700">
                   <strong>
-                    {usageStatus.limits.examsPerWeek - usageStatus.usage.examsThisWeek}/
-                    {usageStatus.limits.examsPerWeek}
+                    {Math.max(
+                      0,
+                      (usageStatus.limits.examsPerWeek || 10) -
+                        (usageStatus.usage.examsThisWeek || 0)
+                    )}
+                    /{usageStatus.limits.examsPerWeek || 10}
                   </strong>{' '}
                   exams remaining this week •{' '}
                   <strong>
-                    {usageStatus.limits.examsPerDay - usageStatus.usage.examsToday}/
-                    {usageStatus.limits.examsPerDay}
+                    {Math.max(
+                      0,
+                      (usageStatus.limits.dailyBurstLimit || 3) -
+                        (usageStatus.usage.examsToday || 0)
+                    )}
+                    /{usageStatus.limits.dailyBurstLimit || 3}
                   </strong>{' '}
                   today • Weekly resets in{' '}
-                  {usageStatus.resetTimes.weeklyResetIn ? Math.ceil(usageStatus.resetTimes.weeklyResetIn / (24 * 3600000)) : '?'} days
+                  {usageStatus.resetTimes.weeklyResetIn && usageStatus.resetTimes.weeklyResetIn > 0
+                    ? Math.ceil(usageStatus.resetTimes.weeklyResetIn / (24 * 3600 * 1000))
+                    : Math.ceil((7 - new Date().getDay() + 1) % 7 || 7)}{' '}
+                  days
                 </p>
               </div>
             </div>
             {!usageStatus.canGenerate && (
               <span className="text-sm font-medium text-orange-600">
-                {usageStatus.usage.examsToday >= usageStatus.limits.examsPerDay
+                {(usageStatus.usage.examsToday || 0) >= (usageStatus.limits.dailyBurstLimit || 3)
                   ? 'Daily Limit Reached'
-                  : usageStatus.usage.examsThisWeek >= usageStatus.limits.examsPerWeek
+                  : (usageStatus.usage.examsThisWeek || 0) >=
+                      (usageStatus.limits.examsPerWeek || 10)
                     ? 'Weekly Limit Reached'
                     : 'Limit Reached'}
               </span>
             )}
+          </CardContent>
+        </Card>
+      ) : (
+        // Skeleton placeholder to prevent layout shift
+        <Card className="border-gray-200 bg-gray-50">
+          <CardContent className="flex items-center justify-between p-6">
+            <div className="flex items-start gap-4">
+              <div className="h-6 w-6 bg-gray-300 rounded animate-pulse" />
+              <div>
+                <div className="h-5 w-40 bg-gray-300 rounded animate-pulse mb-2" />
+                <div className="h-4 w-80 bg-gray-300 rounded animate-pulse" />
+              </div>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -203,10 +241,14 @@ export function HomePage() {
             onClick={() => {
               // Check quota before allowing navigation
               if (usageStatus && !usageStatus.canGenerate) {
+                const dailyLimit = usageStatus.limits.dailyBurstLimit || 3
+                const weeklyLimit = usageStatus.limits.examsPerWeek || 10
+                const examsToday = usageStatus.usage.examsToday || 0
+
                 const reason =
-                  usageStatus.usage.examsToday >= usageStatus.limits.examsPerDay
-                    ? `Daily limit reached (${usageStatus.limits.examsPerDay}/day). Resets in ${usageStatus.resetTimes.dailyResetIn ? Math.ceil(usageStatus.resetTimes.dailyResetIn / 3600000) : '?'} hours.`
-                    : `Weekly limit reached (${usageStatus.limits.examsPerWeek}/week). Resets in ${usageStatus.resetTimes.weeklyResetIn ? Math.ceil(usageStatus.resetTimes.weeklyResetIn / (24 * 3600000)) : '?'} days.`
+                  examsToday >= dailyLimit
+                    ? `Daily limit reached (${dailyLimit}/day). Resets in ${usageStatus.resetTimes.dailyResetIn ? Math.ceil(usageStatus.resetTimes.dailyResetIn / (60 * 60 * 1000)) : 24} hours.`
+                    : `Weekly limit reached (${weeklyLimit}/week). Resets in ${usageStatus.resetTimes.weeklyResetIn ? Math.ceil(usageStatus.resetTimes.weeklyResetIn / (24 * 60 * 60 * 1000)) : Math.ceil((7 - new Date().getDay() + 1) % 7 || 7)} days.`
                 alert(reason)
               } else {
                 navigate('/create-exam')
@@ -251,7 +293,9 @@ export function HomePage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{examStats.thisMonth}</div>
-            <p className="text-xs text-muted-foreground">Since {new Date().toLocaleDateString('en-US', { month: 'long' })} 1</p>
+            <p className="text-xs text-muted-foreground">
+              Since {new Date().toLocaleDateString('en-US', { month: 'long' })} 1
+            </p>
           </CardContent>
         </Card>
       </div>
