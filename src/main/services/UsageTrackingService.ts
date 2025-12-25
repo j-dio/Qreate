@@ -72,13 +72,15 @@ export class UsageTrackingService {
       rateLimitDelaySeconds: parseInt(process.env.RATE_LIMIT_DELAY_SECONDS || '30'),
     }
 
-    // Override for testing/development
-    if (process.env.NODE_ENV === 'development' || process.env.ENABLE_STRESS_TESTING === 'true') {
+    // Override for stress testing only (not automatic in development)
+    if (process.env.ENABLE_STRESS_TESTING === 'true') {
       this.quotas.examsPerWeek = 700
       this.quotas.dailyBurstLimit = 100
       this.quotas.examsPerMonth = 3000
       this.quotas.rateLimitDelaySeconds = 0
-      console.log('[UsageTracking] Testing mode enabled - quotas increased')
+      console.log('[UsageTracking] Stress testing mode enabled - quotas increased')
+    } else {
+      console.log('[UsageTracking] Production quotas enabled - normal user limits')
     }
 
     console.log('[UsageTracking] Initialized with quotas:', this.quotas)
@@ -288,7 +290,7 @@ export class UsageTrackingService {
   /**
    * Calculate time until daily, weekly, and monthly resets
    */
-  private calculateResetTimes(usage: {
+  private calculateResetTimes(_usage: {
     last_daily_reset: string
     last_weekly_reset: string
     last_monthly_reset: string
@@ -300,19 +302,20 @@ export class UsageTrackingService {
     const now = new Date()
 
     // Calculate next day reset (midnight UTC)
-    const nextDayReset = new Date(usage.last_daily_reset)
-    nextDayReset.setUTCDate(nextDayReset.getUTCDate() + 1)
+    const nextDayReset = new Date()
+    nextDayReset.setUTCDate(now.getUTCDate() + 1)
     nextDayReset.setUTCHours(0, 0, 0, 0)
 
     // Calculate next week reset (Monday at midnight UTC)
-    const nextWeekReset = new Date(usage.last_weekly_reset)
-    nextWeekReset.setUTCDate(nextWeekReset.getUTCDate() + (7 - nextWeekReset.getUTCDay() + 1) % 7 || 7)
+    const nextWeekReset = new Date()
+    const currentDay = now.getUTCDay() // 0 = Sunday, 1 = Monday, etc.
+    const daysUntilMonday = currentDay === 0 ? 1 : 8 - currentDay // Days until next Monday
+    nextWeekReset.setUTCDate(now.getUTCDate() + daysUntilMonday)
     nextWeekReset.setUTCHours(0, 0, 0, 0)
 
     // Calculate next month reset (1st of next month at midnight UTC)
-    const nextMonthReset = new Date(usage.last_monthly_reset)
-    nextMonthReset.setUTCMonth(nextMonthReset.getUTCMonth() + 1)
-    nextMonthReset.setUTCDate(1)
+    const nextMonthReset = new Date()
+    nextMonthReset.setUTCMonth(now.getUTCMonth() + 1, 1)
     nextMonthReset.setUTCHours(0, 0, 0, 0)
 
     return {
