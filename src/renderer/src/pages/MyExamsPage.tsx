@@ -29,7 +29,9 @@ import {
   Clock,
   Hash,
   Plus,
-  SortDesc 
+  SortDesc,
+  ChevronLeft,
+  ChevronRight 
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
@@ -49,12 +51,16 @@ interface ExamRecord {
   created_at: string
 }
 
+
 /**
- * Exam History Response Type
+ * Paginated Exam History Response Type
  */
-interface ExamHistoryResponse {
+interface PaginatedExamHistoryResponse {
   success: boolean
   exams?: ExamRecord[]
+  totalCount?: number
+  currentPage?: number
+  totalPages?: number
   error?: string
 }
 
@@ -69,11 +75,17 @@ export function MyExamsPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [sortBy, setSortBy] = useState<'date' | 'title' | 'questions'>('date')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [totalCount, setTotalCount] = useState(0)
+  const [pageSize] = useState(15) // Fixed page size for consistency
 
   /**
-   * Load exam history from backend
+   * Load exam history with pagination (performance optimized)
    */
-  const loadExamHistory = useCallback(async () => {
+  const loadExamHistory = useCallback(async (page = 1) => {
     if (!sessionToken) {
       setError('Not authenticated')
       setIsLoading(false)
@@ -84,11 +96,15 @@ export function MyExamsPage() {
       setIsLoading(true)
       setError(null)
 
-      const response = await window.electron.getExamHistory(sessionToken) as ExamHistoryResponse
+      // Use optimized paginated query
+      const response = await window.electron.getExamHistoryPaginated(sessionToken, page, pageSize) as PaginatedExamHistoryResponse
 
       if (response.success && response.exams) {
         setExams(response.exams)
-        console.log('Loaded', response.exams.length, 'exam records')
+        setCurrentPage(response.currentPage || page)
+        setTotalPages(response.totalPages || 1)
+        setTotalCount(response.totalCount || 0)
+        console.log(`[MyExamsPage] Loaded page ${page}: ${response.exams.length} exams, total: ${response.totalCount}`)
       } else {
         setError(response.error || 'Failed to load exam history')
       }
@@ -98,7 +114,17 @@ export function MyExamsPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [sessionToken])
+  }, [sessionToken, pageSize])
+
+  /**
+   * Handle page change
+   */
+  const handlePageChange = useCallback((newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages && newPage !== currentPage) {
+      setCurrentPage(newPage)
+      loadExamHistory(newPage)
+    }
+  }, [loadExamHistory, totalPages, currentPage])
 
   // Load exam history on mount
   useEffect(() => {
@@ -210,7 +236,7 @@ export function MyExamsPage() {
             <CardDescription>{error}</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button onClick={loadExamHistory} className="w-full">
+            <Button onClick={() => loadExamHistory()} className="w-full">
               Try Again
             </Button>
           </CardContent>
@@ -226,7 +252,8 @@ export function MyExamsPage() {
         <div>
           <h1 className="text-3xl font-bold">My Exams</h1>
           <p className="text-muted-foreground">
-            {exams.length} exam{exams.length !== 1 ? 's' : ''} generated
+            {totalCount} exam{totalCount !== 1 ? 's' : ''} generated total
+            {totalCount > pageSize && ` • Showing ${exams.length} on page ${currentPage} of ${totalPages}`}
           </p>
         </div>
         <Link to="/create-exam">
@@ -238,7 +265,7 @@ export function MyExamsPage() {
       </div>
 
       {/* Empty state */}
-      {exams.length === 0 ? (
+      {totalCount === 0 ? (
         <div className="text-center py-12">
           <FileText className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
           <h3 className="text-lg font-semibold mb-2">No exams yet</h3>
@@ -389,6 +416,95 @@ export function MyExamsPage() {
               >
                 Clear Search
               </Button>
+            </div>
+          )}
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && !searchTerm && (
+            <div className="flex items-center justify-center space-x-4 py-6">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+              >
+                <ChevronLeft className="h-4 w-4 mr-1" />
+                Previous
+              </Button>
+
+              <div className="flex items-center space-x-2">
+                {/* Show first page if we're not near the start */}
+                {currentPage > 3 && (
+                  <>
+                    <Button
+                      variant={1 === currentPage ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => handlePageChange(1)}
+                    >
+                      1
+                    </Button>
+                    <span className="text-muted-foreground">...</span>
+                  </>
+                )}
+
+                {/* Show pages around current page */}
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNum
+                  if (totalPages <= 5) {
+                    pageNum = i + 1
+                  } else if (currentPage <= 3) {
+                    pageNum = i + 1
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i
+                  } else {
+                    pageNum = currentPage - 2 + i
+                  }
+
+                  if (pageNum < 1 || pageNum > totalPages) return null
+
+                  return (
+                    <Button
+                      key={pageNum}
+                      variant={pageNum === currentPage ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => handlePageChange(pageNum)}
+                    >
+                      {pageNum}
+                    </Button>
+                  )
+                })}
+
+                {/* Show last page if we're not near the end */}
+                {currentPage < totalPages - 2 && totalPages > 5 && (
+                  <>
+                    <span className="text-muted-foreground">...</span>
+                    <Button
+                      variant={totalPages === currentPage ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => handlePageChange(totalPages)}
+                    >
+                      {totalPages}
+                    </Button>
+                  </>
+                )}
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+              >
+                Next
+                <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            </div>
+          )}
+
+          {/* Page Info */}
+          {totalCount > 0 && (
+            <div className="text-center text-sm text-muted-foreground">
+              Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalCount)} of {totalCount} exams
             </div>
           )}
         </>

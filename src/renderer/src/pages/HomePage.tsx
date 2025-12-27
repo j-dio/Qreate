@@ -24,7 +24,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAppStore } from '../store/useAppStore'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useEffect, useState, useCallback, memo } from 'react'
 
 interface UsageStatus {
   success: boolean
@@ -60,6 +60,57 @@ interface ExamRecord {
   created_at: string
 }
 
+/**
+ * Memoized ExamCard component to prevent unnecessary re-renders
+ * Only re-renders when exam data actually changes
+ */
+const ExamCard = memo(({ exam }: { exam: ExamRecord }) => {
+  return (
+    <Card
+      key={exam.id}
+      className="hover:shadow-md transition-shadow cursor-pointer"
+      onClick={() => {
+        // Open PDF file using local file handler
+        window.electron.openLocalFile(exam.file_path).catch(() => {
+          alert('Could not open exam file. The file may have been moved or deleted.')
+        })
+      }}
+    >
+      <CardHeader>
+        <CardTitle className="line-clamp-2 text-base">{exam.title}</CardTitle>
+        <CardDescription className="flex items-center gap-2 text-xs">
+          <Calendar className="h-3 w-3" />
+          {new Date(exam.created_at).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          })}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-2">
+          <p className="text-sm text-muted-foreground line-clamp-1">
+            <strong>Topic:</strong> {exam.topic}
+          </p>
+          <div className="flex items-center justify-between text-sm">
+            <span className="flex items-center gap-1 text-muted-foreground">
+              <Hash className="h-3 w-3" />
+              {exam.total_questions} questions
+            </span>
+            <span className="rounded-full px-2 py-1 text-xs font-medium bg-green-100 text-green-700">
+              Ready
+            </span>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+})
+
+ExamCard.displayName = 'ExamCard'
+
 export function HomePage() {
   const navigate = useNavigate()
   const user = useAppStore(state => state.user)
@@ -70,29 +121,12 @@ export function HomePage() {
     total: 0,
     thisWeek: 0,
     thisMonth: 0,
+    today: 0,
   })
   const [isLoadingExams, setIsLoadingExams] = useState(true)
 
-  // Memoize date calculations to avoid recalculating on every render
-  const { startOfWeek, startOfMonth } = useMemo(() => {
-    const now = new Date()
-
-    // Get start of current week (Monday)
-    const startOfWeek = new Date(now)
-    const dayOfWeek = now.getDay() // 0 = Sunday, 1 = Monday, etc.
-    const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1 // Convert Sunday = 0 to 6 days from Monday
-    startOfWeek.setDate(now.getDate() - daysFromMonday)
-    startOfWeek.setHours(0, 0, 0, 0)
-
-    // Get start of current month
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-    startOfMonth.setHours(0, 0, 0, 0)
-
-    return { startOfWeek, startOfMonth }
-  }, []) // Only calculate once per component mount
-
-  // Load exam history and calculate real statistics (optimized single IPC call)
-  const loadExamHistory = useCallback(async () => {
+  // Load recent exams (optimized - only last 24 hours, max 3 exams)
+  const loadRecentExams = useCallback(async () => {
     if (!sessionToken || !user) {
       setIsLoadingExams(false)
       return
@@ -101,36 +135,36 @@ export function HomePage() {
     try {
       setIsLoadingExams(true)
 
-      // Get ALL exams in a single IPC call (more efficient)
-      const allExamsResponse = await window.electron.getExamHistory(sessionToken)
+      // Get only recent exams (last 24 hours, limit 3) - MUCH faster
+      const recentExamsResponse = await window.electron.getRecentExams(sessionToken, 3)
 
-      if (allExamsResponse.success && allExamsResponse.exams) {
-        const allExams = allExamsResponse.exams
-
-        // Set recent exams (first 10)
-        setRecentExams(allExams.slice(0, 10))
-
-        // Calculate statistics using memoized date boundaries
-        const thisWeekExams = allExams.filter(
-          (exam: ExamRecord) => new Date(exam.created_at) >= startOfWeek
-        ).length
-
-        const thisMonthExams = allExams.filter(
-          (exam: ExamRecord) => new Date(exam.created_at) >= startOfMonth
-        ).length
-
-        setExamStats({
-          total: allExams.length,
-          thisWeek: thisWeekExams,
-          thisMonth: thisMonthExams,
-        })
+      if (recentExamsResponse.success && recentExamsResponse.exams) {
+        setRecentExams(recentExamsResponse.exams)
+        console.log('[HomePage] Loaded', recentExamsResponse.exams.length, 'recent exams (last 24h)')
       }
     } catch (error) {
-      console.error('[HomePage] Failed to load exam history:', error)
+      console.error('[HomePage] Failed to load recent exams:', error)
     } finally {
       setIsLoadingExams(false)
     }
-  }, [sessionToken, user, startOfWeek, startOfMonth])
+  }, [sessionToken, user])
+
+  // Load exam statistics (optimized - database aggregation, no full records)
+  const loadExamStats = useCallback(async () => {
+    if (!sessionToken || !user) return
+
+    try {
+      // Get statistics from optimized database queries (COUNT only)
+      const statsResponse = await window.electron.getExamStats(sessionToken)
+
+      if (statsResponse.success && statsResponse.stats) {
+        setExamStats(statsResponse.stats)
+        console.log('[HomePage] Loaded exam stats:', statsResponse.stats)
+      }
+    } catch (error) {
+      console.error('[HomePage] Failed to load exam statistics:', error)
+    }
+  }, [sessionToken, user])
 
   // Fetch usage status
   useEffect(() => {
@@ -150,10 +184,14 @@ export function HomePage() {
     fetchUsageStatus()
   }, [user])
 
-  // Load exam history (separate useEffect to prevent dependency loops)
+  // Load recent exams and statistics (separate useEffects, optimized calls)
   useEffect(() => {
-    loadExamHistory()
-  }, [loadExamHistory])
+    loadRecentExams()
+  }, [loadRecentExams])
+
+  useEffect(() => {
+    loadExamStats()
+  }, [loadExamStats])
 
   return (
     <div className="space-y-8">
@@ -162,7 +200,7 @@ export function HomePage() {
         <h2 className="text-3xl font-bold tracking-tight min-h-[2.5rem]">
           {user ? `Welcome, ${user.name}!` : 'Welcome to Qreate!'}
         </h2>
-        <p className="text-muted-foreground">Create AI-powered exams from your study materials</p>
+        <p className="text-muted-foreground">Create AI-generated exams from your study materials</p>
       </div>
 
       {/* Usage Quota Banner */}
@@ -334,46 +372,7 @@ export function HomePage() {
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {recentExams.slice(0, 3).map(exam => (
-              <Card
-                key={exam.id}
-                className="hover:shadow-md transition-shadow cursor-pointer"
-                onClick={() => {
-                  // Open PDF file using local file handler
-                  window.electron.openLocalFile(exam.file_path).catch(() => {
-                    alert('Could not open exam file. The file may have been moved or deleted.')
-                  })
-                }}
-              >
-                <CardHeader>
-                  <CardTitle className="line-clamp-2 text-base">{exam.title}</CardTitle>
-                  <CardDescription className="flex items-center gap-2 text-xs">
-                    <Calendar className="h-3 w-3" />
-                    {new Date(exam.created_at).toLocaleDateString('en-US', {
-                      year: 'numeric',
-                      month: 'short',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    <p className="text-sm text-muted-foreground line-clamp-1">
-                      <strong>Topic:</strong> {exam.topic}
-                    </p>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="flex items-center gap-1 text-muted-foreground">
-                        <Hash className="h-3 w-3" />
-                        {exam.total_questions} questions
-                      </span>
-                      <span className="rounded-full px-2 py-1 text-xs font-medium bg-green-100 text-green-700">
-                        Ready
-                      </span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+              <ExamCard key={exam.id} exam={exam} />
             ))}
           </div>
         )}

@@ -807,6 +807,123 @@ function registerIpcHandlers(): void {
   })
 
   /**
+   * Get recent exams for homepage (optimized, 24-hour window only)
+   *
+   * @param sessionToken - Session token for authentication
+   * @param limit - Maximum number of recent exams (default: 3)
+   * @returns Array of recent exam records
+   */
+  ipcMain.handle('get-recent-exams', async (_, sessionToken: string, limit: number = 3) => {
+    console.log('[IPC] Get recent exams request, limit:', limit)
+    
+    try {
+      // Validate session
+      const validation = authService.validateSession(sessionToken)
+      
+      if (!validation.valid || !validation.userId) {
+        return {
+          success: false,
+          error: 'Invalid session. Please log in again.',
+        }
+      }
+      
+      // Get recent exams from database (last 24 hours only)
+      const recentExams = databaseService.getRecentExams(validation.userId, limit)
+      
+      console.log('[IPC] Retrieved', recentExams.length, 'recent exam records for user:', validation.userId)
+      
+      return {
+        success: true,
+        exams: recentExams,
+      }
+    } catch (error) {
+      console.error('[IPC] Get recent exams error:', error)
+      return {
+        success: false,
+        error: 'Failed to retrieve recent exams.',
+      }
+    }
+  })
+
+  /**
+   * Get exam statistics without loading full exam records (performance optimized)
+   *
+   * @param sessionToken - Session token for authentication
+   * @returns Aggregated exam statistics
+   */
+  ipcMain.handle('get-exam-stats', async (_, sessionToken: string) => {
+    console.log('[IPC] Get exam stats request')
+    
+    try {
+      // Validate session
+      const validation = authService.validateSession(sessionToken)
+      
+      if (!validation.valid || !validation.userId) {
+        return {
+          success: false,
+          error: 'Invalid session. Please log in again.',
+        }
+      }
+      
+      // Get exam statistics from database (optimized count queries)
+      const examStats = databaseService.getExamStats(validation.userId)
+      
+      console.log('[IPC] Retrieved exam stats for user:', validation.userId, examStats)
+      
+      return {
+        success: true,
+        stats: examStats,
+      }
+    } catch (error) {
+      console.error('[IPC] Get exam stats error:', error)
+      return {
+        success: false,
+        error: 'Failed to retrieve exam statistics.',
+      }
+    }
+  })
+
+  /**
+   * Get paginated exam history for MyExamsPage
+   *
+   * @param sessionToken - Session token for authentication
+   * @param page - Page number (1-based, default: 1)
+   * @param pageSize - Number of exams per page (default: 15)
+   * @returns Paginated exam records with metadata
+   */
+  ipcMain.handle('get-exam-history-paginated', async (_, sessionToken: string, page: number = 1, pageSize: number = 15) => {
+    console.log('[IPC] Get paginated exam history request, page:', page, 'size:', pageSize)
+    
+    try {
+      // Validate session
+      const validation = authService.validateSession(sessionToken)
+      
+      if (!validation.valid || !validation.userId) {
+        return {
+          success: false,
+          error: 'Invalid session. Please log in again.',
+        }
+      }
+      
+      // Get paginated exam history from database
+      const paginatedResult = databaseService.getExamHistoryPaginated(validation.userId, page, pageSize)
+      
+      console.log('[IPC] Retrieved page', page, 'with', paginatedResult.exams.length, 'exams, total:', paginatedResult.totalCount)
+      
+      return {
+        success: true,
+        ...paginatedResult,
+      }
+    } catch (error) {
+      console.error('[IPC] Get paginated exam history error:', error)
+      return {
+        success: false,
+        error: 'Failed to retrieve paginated exam history.',
+      }
+    }
+  })
+
+  /**
    * Save exam to history
    *
    * @param sessionToken - Session token for authentication

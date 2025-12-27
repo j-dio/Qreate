@@ -371,6 +371,139 @@ export class DatabaseService {
   }
 
   /**
+   * Get recent exams for user (last 24 hours only)
+   * Optimized for homepage display - reduces memory usage
+   *
+   * @param userId - User ID
+   * @param limit - Max number of results (default: 10)
+   * @returns Array of recent exam records
+   */
+  getRecentExams(userId: number, limit: number = 10): ExamRecord[] {
+    const twentyFourHoursAgo = new Date()
+    twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24)
+    
+    const stmt = this.db.prepare(`
+      SELECT * FROM exams
+      WHERE user_id = ? AND created_at >= ?
+      ORDER BY created_at DESC
+      LIMIT ?
+    `)
+
+    return stmt.all(userId, twentyFourHoursAgo.toISOString(), limit) as ExamRecord[]
+  }
+
+  /**
+   * Get exam statistics without loading full records
+   * Much faster than loading all exams and calculating on client
+   *
+   * @param userId - User ID
+   * @returns Aggregated exam statistics
+   */
+  getExamStats(userId: number): {
+    total: number
+    thisWeek: number
+    thisMonth: number
+    today: number
+  } {
+    // Calculate date boundaries
+    const now = new Date()
+    
+    // Today (start of day)
+    const startOfToday = new Date(now)
+    startOfToday.setHours(0, 0, 0, 0)
+    
+    // This week (Monday start)
+    const startOfWeek = new Date(now)
+    const dayOfWeek = now.getDay()
+    const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1
+    startOfWeek.setDate(now.getDate() - daysFromMonday)
+    startOfWeek.setHours(0, 0, 0, 0)
+    
+    // This month
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+    startOfMonth.setHours(0, 0, 0, 0)
+
+    // Execute optimized count queries
+    const totalStmt = this.db.prepare(`SELECT COUNT(*) as count FROM exams WHERE user_id = ?`)
+    const weekStmt = this.db.prepare(`SELECT COUNT(*) as count FROM exams WHERE user_id = ? AND created_at >= ?`)
+    const monthStmt = this.db.prepare(`SELECT COUNT(*) as count FROM exams WHERE user_id = ? AND created_at >= ?`)
+    const todayStmt = this.db.prepare(`SELECT COUNT(*) as count FROM exams WHERE user_id = ? AND created_at >= ?`)
+
+    const total = (totalStmt.get(userId) as { count: number }).count
+    const thisWeek = (weekStmt.get(userId, startOfWeek.toISOString()) as { count: number }).count
+    const thisMonth = (monthStmt.get(userId, startOfMonth.toISOString()) as { count: number }).count
+    const today = (todayStmt.get(userId, startOfToday.toISOString()) as { count: number }).count
+
+    return { total, thisWeek, thisMonth, today }
+  }
+
+  /**
+   * Get exam history with pagination
+   * For MyExamsPage to handle large exam histories efficiently
+   *
+   * @param userId - User ID
+   * @param page - Page number (1-based)
+   * @param pageSize - Number of exams per page (default: 15)
+   * @returns Paginated exam records with total count
+   */
+  getExamHistoryPaginated(userId: number, page: number = 1, pageSize: number = 15): {
+    exams: ExamRecord[]
+    totalCount: number
+    currentPage: number
+    totalPages: number
+  } {
+    // Get total count
+    const countStmt = this.db.prepare(`SELECT COUNT(*) as count FROM exams WHERE user_id = ?`)
+    const totalCount = (countStmt.get(userId) as { count: number }).count
+    const totalPages = Math.ceil(totalCount / pageSize)
+
+    // Get paginated exams
+    const offset = (page - 1) * pageSize
+    const stmt = this.db.prepare(`
+      SELECT * FROM exams
+      WHERE user_id = ?
+      ORDER BY created_at DESC
+      LIMIT ? OFFSET ?
+    `)
+
+    const exams = stmt.all(userId, pageSize, offset) as ExamRecord[]
+
+    return {
+      exams,
+      totalCount,
+      currentPage: page,
+      totalPages
+    }
+  }
+
+  /**
+   * Clean up old exam metadata (keep records but mark as archived)
+   * Helps maintain database performance over time
+   *
+   * @param olderThanDays - Archive exams older than N days (default: 90)
+   * @returns Number of exams archived
+   */
+  cleanupOldExams(olderThanDays: number = 90): number {
+    const cutoffDate = new Date()
+    cutoffDate.setDate(cutoffDate.getDate() - olderThanDays)
+
+    // For now, just log how many would be cleaned up
+    // Future enhancement: add 'archived' column to exams table
+    const countStmt = this.db.prepare(`
+      SELECT COUNT(*) as count FROM exams 
+      WHERE created_at < ?
+    `)
+    
+    const oldExamsCount = (countStmt.get(cutoffDate.toISOString()) as { count: number }).count
+    
+    if (oldExamsCount > 0) {
+      console.log(`[Database] Found ${oldExamsCount} exams older than ${olderThanDays} days that could be archived`)
+    }
+    
+    return oldExamsCount
+  }
+
+  /**
    * Get user by email
    *
    * @param email - User email
