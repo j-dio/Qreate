@@ -135,6 +135,19 @@ const electronAPI = {
     return ipcRenderer.invoke('get-exam-history', sessionToken, limit)
   },
 
+  // Optimized exam data methods for performance
+  getRecentExams: (sessionToken: string, limit?: number) => {
+    return ipcRenderer.invoke('get-recent-exams', sessionToken, limit)
+  },
+
+  getExamStats: (sessionToken: string) => {
+    return ipcRenderer.invoke('get-exam-stats', sessionToken)
+  },
+
+  getExamHistoryPaginated: (sessionToken: string, page?: number, pageSize?: number) => {
+    return ipcRenderer.invoke('get-exam-history-paginated', sessionToken, page, pageSize)
+  },
+
   saveExamToHistory: (sessionToken: string, userId: number, examData: { title: string, topic: string, totalQuestions: number }, pdfPath: string) => {
     return ipcRenderer.invoke('save-exam-to-history', sessionToken, userId, examData, pdfPath)
   },
