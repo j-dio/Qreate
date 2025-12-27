@@ -80,6 +80,48 @@ export class DatabaseService {
   }
 
   /**
+   * Check if a column exists in a table
+   *
+   * @param tableName - Name of the table
+   * @param columnName - Name of the column to check
+   * @returns true if column exists, false otherwise
+   */
+  private columnExists(tableName: string, columnName: string): boolean {
+    try {
+      const result = this.db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>
+      return result.some(column => column.name === columnName)
+    } catch (error) {
+      console.error(`[Database] Error checking column ${tableName}.${columnName}:`, error)
+      return false
+    }
+  }
+
+  /**
+   * Add column to table if it doesn't exist
+   *
+   * @param tableName - Name of the table
+   * @param columnName - Name of the column to add
+   * @param columnDefinition - SQL column definition (e.g., "TEXT NOT NULL DEFAULT ''")
+   * @returns true if column was added or already exists, false if failed
+   */
+  private addColumnIfNotExists(tableName: string, columnName: string, columnDefinition: string): boolean {
+    try {
+      if (this.columnExists(tableName, columnName)) {
+        console.log(`[Database] Column ${tableName}.${columnName} already exists`)
+        return true
+      }
+
+      const sql = `ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnDefinition}`
+      this.db.exec(sql)
+      console.log(`[Database] Successfully added column ${tableName}.${columnName}`)
+      return true
+    } catch (error) {
+      console.error(`[Database] Failed to add column ${tableName}.${columnName}:`, error)
+      return false
+    }
+  }
+
+  /**
    * Initialize database schema
    *
    * Creates tables if they don't exist.
@@ -98,15 +140,7 @@ export class DatabaseService {
     `)
 
     // Add name column to existing users table if it doesn't exist (migration)
-    try {
-      this.db.exec(`
-        ALTER TABLE users ADD COLUMN name TEXT NOT NULL DEFAULT ''
-      `)
-      console.log('[Database] Added name column to users table')
-    } catch {
-      // Column already exists or other error - this is expected for new installations
-      // SQLite will throw "duplicate column name" error if column exists
-    }
+    this.addColumnIfNotExists('users', 'name', `TEXT NOT NULL DEFAULT ''`)
 
     // User usage tracking table
     this.db.exec(`
@@ -125,25 +159,12 @@ export class DatabaseService {
     `)
 
     // Migration: Add new columns for weekly tracking if they don't exist
-    try {
-      this.db.exec(`ALTER TABLE user_usage ADD COLUMN exams_this_week INTEGER NOT NULL DEFAULT 0`)
-      console.log('[Database] Added exams_this_week column to user_usage table')
-    } catch {
-      // Column already exists
-    }
+    const weeklyTrackingSuccess = this.addColumnIfNotExists('user_usage', 'exams_this_week', `INTEGER NOT NULL DEFAULT 0`)
+    const weeklyResetSuccess = this.addColumnIfNotExists('user_usage', 'last_weekly_reset', `TEXT NOT NULL DEFAULT ''`)
+    const lastExamSuccess = this.addColumnIfNotExists('user_usage', 'last_exam_generated', `TEXT`)
 
-    try {
-      this.db.exec(`ALTER TABLE user_usage ADD COLUMN last_weekly_reset TEXT NOT NULL DEFAULT (datetime('now'))`)
-      console.log('[Database] Added last_weekly_reset column to user_usage table')
-    } catch {
-      // Column already exists
-    }
-
-    try {
-      this.db.exec(`ALTER TABLE user_usage ADD COLUMN last_exam_generated TEXT`)
-      console.log('[Database] Added last_exam_generated column to user_usage table')
-    } catch {
-      // Column already exists
+    if (!weeklyTrackingSuccess || !weeklyResetSuccess || !lastExamSuccess) {
+      console.warn('[Database] Some user_usage columns could not be added. Weekly tracking may not work properly.')
     }
 
     // Exams history table
@@ -167,6 +188,55 @@ export class DatabaseService {
     `)
 
     console.log('[Database] Schema initialized')
+    
+    // Run database health check
+    this.performSchemaHealthCheck()
+  }
+
+  /**
+   * Perform database schema health check
+   * Verifies all expected tables and columns exist
+   */
+  private performSchemaHealthCheck(): void {
+    console.log('[Database] Performing schema health check...')
+    
+    const expectedTables = ['users', 'user_usage', 'exams']
+    const expectedColumns = {
+      users: ['id', 'email', 'name', 'password_hash', 'created_at'],
+      user_usage: ['user_id', 'exams_today', 'exams_this_week', 'exams_this_month', 'last_daily_reset', 'last_weekly_reset', 'last_monthly_reset', 'total_exams_generated', 'last_exam_generated'],
+      exams: ['id', 'user_id', 'title', 'topic', 'total_questions', 'file_path', 'created_at']
+    }
+
+    let healthIssues = 0
+
+    // Check tables exist
+    for (const tableName of expectedTables) {
+      try {
+        this.db.prepare(`SELECT 1 FROM ${tableName} LIMIT 1`).get()
+        console.log(`[Database] ✓ Table ${tableName} exists`)
+      } catch (error) {
+        console.error(`[Database] ✗ Table ${tableName} missing or corrupted:`, error)
+        healthIssues++
+      }
+    }
+
+    // Check columns exist
+    for (const [tableName, columns] of Object.entries(expectedColumns)) {
+      for (const columnName of columns) {
+        if (this.columnExists(tableName, columnName)) {
+          console.log(`[Database] ✓ Column ${tableName}.${columnName} exists`)
+        } else {
+          console.warn(`[Database] ⚠ Column ${tableName}.${columnName} missing`)
+          healthIssues++
+        }
+      }
+    }
+
+    if (healthIssues === 0) {
+      console.log('[Database] ✅ Schema health check passed - all tables and columns present')
+    } else {
+      console.warn(`[Database] ⚠ Schema health check found ${healthIssues} issues - some features may not work properly`)
+    }
   }
 
   /**
@@ -174,11 +244,27 @@ export class DatabaseService {
    *
    * Ensures a usage record exists for the user.
    * Resets daily/monthly counters if needed.
+   * Handles missing columns gracefully by attempting to add them.
    *
    * @param userId - User ID
    * @returns User usage record
    */
   getUserUsage(userId: number): UserUsage {
+    // Ensure all required columns exist before querying
+    const hasWeeklyTracking = this.columnExists('user_usage', 'exams_this_week')
+    const hasWeeklyReset = this.columnExists('user_usage', 'last_weekly_reset')
+    const hasLastExam = this.columnExists('user_usage', 'last_exam_generated')
+
+    // Attempt to add missing columns if needed
+    if (!hasWeeklyTracking) {
+      this.addColumnIfNotExists('user_usage', 'exams_this_week', `INTEGER NOT NULL DEFAULT 0`)
+    }
+    if (!hasWeeklyReset) {
+      this.addColumnIfNotExists('user_usage', 'last_weekly_reset', `TEXT NOT NULL DEFAULT ''`)
+    }
+    if (!hasLastExam) {
+      this.addColumnIfNotExists('user_usage', 'last_exam_generated', `TEXT`)
+    }
     // Get existing record
     const stmt = this.db.prepare(`
       SELECT * FROM user_usage WHERE user_id = ?
@@ -212,6 +298,23 @@ export class DatabaseService {
         total_exams_generated: 0,
         last_exam_generated: null,
       }
+    }
+
+    // Fix empty weekly reset values from migration (SQLite doesn't allow datetime('now') defaults for ALTER TABLE)
+    if (!usage.last_weekly_reset || usage.last_weekly_reset === '') {
+      const now = new Date().toISOString()
+      this.db
+        .prepare(
+          `
+        UPDATE user_usage
+        SET last_weekly_reset = ?
+        WHERE user_id = ?
+      `
+        )
+        .run(now, userId)
+      
+      usage.last_weekly_reset = now
+      console.log('[Database] Initialized empty last_weekly_reset for user:', userId)
     }
 
     // Check if daily reset needed
