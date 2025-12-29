@@ -140,9 +140,6 @@ const electronAPI = {
     return ipcRenderer.invoke('get-recent-exams', sessionToken, limit)
   },
 
-  getExamStats: (sessionToken: string) => {
-    return ipcRenderer.invoke('get-exam-stats', sessionToken)
-  },
 
   getExamHistoryPaginated: (sessionToken: string, page?: number, pageSize?: number) => {
     return ipcRenderer.invoke('get-exam-history-paginated', sessionToken, page, pageSize)

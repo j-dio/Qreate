@@ -845,43 +845,6 @@ function registerIpcHandlers(): void {
     }
   })
 
-  /**
-   * Get exam statistics without loading full exam records (performance optimized)
-   *
-   * @param sessionToken - Session token for authentication
-   * @returns Aggregated exam statistics
-   */
-  ipcMain.handle('get-exam-stats', async (_, sessionToken: string) => {
-    console.log('[IPC] Get exam stats request')
-    
-    try {
-      // Validate session
-      const validation = authService.validateSession(sessionToken)
-      
-      if (!validation.valid || !validation.userId) {
-        return {
-          success: false,
-          error: 'Invalid session. Please log in again.',
-        }
-      }
-      
-      // Get exam statistics from database (optimized count queries)
-      const examStats = databaseService.getExamStats(validation.userId)
-      
-      console.log('[IPC] Retrieved exam stats for user:', validation.userId, examStats)
-      
-      return {
-        success: true,
-        stats: examStats,
-      }
-    } catch (error) {
-      console.error('[IPC] Get exam stats error:', error)
-      return {
-        success: false,
-        error: 'Failed to retrieve exam statistics.',
-      }
-    }
-  })
 
   /**
    * Get paginated exam history for MyExamsPage

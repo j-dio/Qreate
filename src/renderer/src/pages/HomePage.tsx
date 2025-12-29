@@ -13,8 +13,6 @@
 import {
   Plus,
   FileText,
-  Clock,
-  CheckCircle2,
   Zap,
   Calendar,
   Hash,
@@ -117,12 +115,6 @@ export function HomePage() {
   const sessionToken = useAppStore(state => state.sessionToken)
   const [usageStatus, setUsageStatus] = useState<UsageStatus | null>(null)
   const [recentExams, setRecentExams] = useState<ExamRecord[]>([])
-  const [examStats, setExamStats] = useState({
-    total: 0,
-    thisWeek: 0,
-    thisMonth: 0,
-    today: 0,
-  })
   const [isLoadingExams, setIsLoadingExams] = useState(true)
 
   // Load recent exams (optimized - only last 24 hours, max 3 exams)
@@ -149,22 +141,6 @@ export function HomePage() {
     }
   }, [sessionToken, user])
 
-  // Load exam statistics (optimized - database aggregation, no full records)
-  const loadExamStats = useCallback(async () => {
-    if (!sessionToken || !user) return
-
-    try {
-      // Get statistics from optimized database queries (COUNT only)
-      const statsResponse = await window.electron.getExamStats(sessionToken)
-
-      if (statsResponse.success && statsResponse.stats) {
-        setExamStats(statsResponse.stats)
-        console.log('[HomePage] Loaded exam stats:', statsResponse.stats)
-      }
-    } catch (error) {
-      console.error('[HomePage] Failed to load exam statistics:', error)
-    }
-  }, [sessionToken, user])
 
   // Fetch usage status
   useEffect(() => {
@@ -184,14 +160,10 @@ export function HomePage() {
     fetchUsageStatus()
   }, [user])
 
-  // Load recent exams and statistics (separate useEffects, optimized calls)
+  // Load recent exams
   useEffect(() => {
     loadRecentExams()
   }, [loadRecentExams])
-
-  useEffect(() => {
-    loadExamStats()
-  }, [loadExamStats])
 
   return (
     <div className="space-y-8">
@@ -300,43 +272,6 @@ export function HomePage() {
         </CardContent>
       </Card>
 
-      {/* Statistics */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Exams</CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{examStats.total}</div>
-            <p className="text-xs text-muted-foreground">All time</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">This Week</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{examStats.thisWeek}</div>
-            <p className="text-xs text-muted-foreground">Since Monday</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">This Month</CardTitle>
-            <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{examStats.thisMonth}</div>
-            <p className="text-xs text-muted-foreground">
-              Since {new Date().toLocaleDateString('en-US', { month: 'long' })} 1
-            </p>
-          </CardContent>
-        </Card>
-      </div>
 
       {/* Recent Exams */}
       <div className="space-y-4">
