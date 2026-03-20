@@ -42,9 +42,6 @@ export function ConfigurationSummary() {
       trueFalse: 'True/False',
       fillInTheBlanks: 'Fill in the Blanks',
       shortAnswer: 'Short Answer',
-      essay: 'Essay',
-      matching: 'Matching',
-      identification: 'Identification',
     }
     return labels[type]
   }
