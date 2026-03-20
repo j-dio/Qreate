@@ -31,17 +31,10 @@ export type GenerationStatus = 'idle' | 'processing' | 'validating' | 'completed
  */
 export interface GeneratedQuestion {
   id: string
-  type:
-    | 'multipleChoice'
-    | 'trueFalse'
-    | 'fillInTheBlanks'
-    | 'shortAnswer'
-    | 'essay'
-    | 'matching'
-    | 'identification'
+  type: 'multipleChoice' | 'trueFalse' | 'fillInTheBlanks' | 'shortAnswer'
   difficulty: 'veryEasy' | 'easy' | 'moderate' | 'hard' | 'veryHard'
   question: string
-  options?: string[] // For multiple choice, matching
+  options?: string[] // For multiple choice
   answer: string | string[] // Single answer or multiple answers
   points?: number // Optional points value
   explanation?: string // Optional explanation for answer

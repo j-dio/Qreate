@@ -200,9 +200,6 @@ export interface ExamGenerationConfig {
     trueFalse?: number
     fillInTheBlanks?: number
     shortAnswer?: number
-    essay?: number
-    matching?: number
-    identification?: number
   }
 
   // Difficulty distribution
