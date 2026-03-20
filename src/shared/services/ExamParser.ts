@@ -43,9 +43,6 @@ const QUESTION_TYPE_PATTERNS: Record<string, GeneratedQuestion['type']> = {
   'fill in the blank': 'fillInTheBlanks',
   'fill in the blanks': 'fillInTheBlanks',
   'short answer': 'shortAnswer',
-  essay: 'essay',
-  matching: 'matching',
-  identification: 'identification',
 }
 
 /**
