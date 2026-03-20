@@ -457,20 +457,19 @@ async function registerIpcHandlers(): Promise<void> {
    */
   ipcMain.handle('ai-test-connection', async () => {
     console.log('[IPC] Test AI provider connection')
-    
+
     try {
-      const results = await providerFactory.testAllConnections()
+      const result = await providerFactory.testConnection()
       return {
         success: true,
-        results,
-        currentProvider: providerFactory.getCurrentProviderType()
+        ...result,
+        providerInfo: providerFactory.getProviderInfo()
       }
     } catch (error) {
       console.error('[IPC] AI provider connection test failed:', error)
       return {
         success: false,
-        message: 'Connection test failed',
-        details: error instanceof Error ? error.message : 'Unknown error',
+        message: error instanceof Error ? error.message : 'Connection test failed',
       }
     }
   })
@@ -480,16 +479,14 @@ async function registerIpcHandlers(): Promise<void> {
    */
   ipcMain.handle('groq-test-connection', async () => {
     console.log('[IPC] Test connection (legacy groq handler)')
-    
+
     try {
-      const currentProvider = providerFactory.getCurrentProvider()
-      return await currentProvider.testConnection()
+      return await providerFactory.testConnection()
     } catch (error) {
       console.error('[IPC] AI provider test failed:', error)
       return {
         success: false,
-        message: 'Provider not available',
-        details: error instanceof Error ? error.message : 'Unknown error',
+        message: error instanceof Error ? error.message : 'Provider not available',
       }
     }
   })
@@ -532,59 +529,14 @@ async function registerIpcHandlers(): Promise<void> {
    */
   ipcMain.handle('ai-get-provider-info', async () => {
     console.log('[IPC] Get AI provider information')
-    
+
     try {
-      return {
-        success: true,
-        providerInfo: providerFactory.getProviderInfo()
-      }
+      return { success: true, providerInfo: providerFactory.getProviderInfo() }
     } catch (error) {
       console.error('[IPC] Failed to get provider info:', error)
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to get provider info'
-      }
-    }
-  })
-
-  /**
-   * AI Provider: Switch to fallback provider
-   */
-  ipcMain.handle('ai-switch-to-fallback', async () => {
-    console.log('[IPC] Switch to fallback provider')
-    
-    try {
-      const success = await providerFactory.switchToFallback()
-      return {
-        success,
-        currentProvider: success ? providerFactory.getCurrentProviderType() : null
-      }
-    } catch (error) {
-      console.error('[IPC] Failed to switch to fallback:', error)
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to switch providers'
-      }
-    }
-  })
-
-  /**
-   * AI Provider: Reset to primary provider
-   */
-  ipcMain.handle('ai-reset-to-primary', async () => {
-    console.log('[IPC] Reset to primary provider')
-    
-    try {
-      const success = await providerFactory.resetToPrimary()
-      return {
-        success,
-        currentProvider: success ? providerFactory.getCurrentProviderType() : null
-      }
-    } catch (error) {
-      console.error('[IPC] Failed to reset to primary:', error)
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to reset provider'
       }
     }
   })
@@ -623,14 +575,14 @@ async function registerIpcHandlers(): Promise<void> {
         }
       }
 
-      // Check if any provider is available
+      // Check if provider is available
       try {
         providerFactory.getCurrentProvider()
-        console.log(`[IPC] Using provider: ${providerFactory.getCurrentProviderType()}`)
+        console.log('[IPC] Using provider: together-ai (TogetherProvider)')
       } catch {
         return {
           success: false,
-          error: 'AI provider not initialized. Please check your API keys in .env.local.',
+          error: 'AI provider not initialized. Please check your TOGETHER_API_KEY in .env.local.',
         }
       }
 
