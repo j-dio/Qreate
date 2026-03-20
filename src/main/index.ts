@@ -461,8 +461,8 @@ async function registerIpcHandlers(): Promise<void> {
     try {
       const result = await providerFactory.testConnection()
       return {
-        success: true,
         ...result,
+        success: result.success,
         providerInfo: providerFactory.getProviderInfo()
       }
     } catch (error) {
