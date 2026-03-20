@@ -27,12 +27,12 @@ Phases execute in numeric order.
 **Goal:** Replace the broken Groq/Llama single-pass generation (3/10 quality) with Together AI/Qwen3-235B using a two-pass PFQS architecture that separates topic planning from question generation, while removing dead code and simplifying to 4 question types and 50-question max.
 **Requirements**: [PM-01, PM-02, PM-03, PM-04, PM-05, PM-06]
 **Depends on:** Phase 0
-**Plans:** 3 plans
+**Plans:** 3/3 plans complete
 
 Plans:
 - [x] 01-01-PLAN.md -- Create TogetherProvider with two-pass PFQS generation and update shared types
 - [x] 01-02-PLAN.md -- Delete dead code (GeminiProvider, PromptOptimizer) and simplify frontend to 4 types / 50 max
-- [ ] 01-03-PLAN.md -- Rewrite ProviderFactory, update IPC handlers, remove Gemini SDK, verify end-to-end
+- [x] 01-03-PLAN.md -- Rewrite ProviderFactory, update IPC handlers, remove Gemini SDK, verify end-to-end
 
 **Requirement Definitions:**
 - PM-01: Together AI as primary provider with Qwen3-235B-A22B-Instruct-2507
