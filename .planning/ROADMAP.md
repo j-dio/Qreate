@@ -30,7 +30,7 @@ Phases execute in numeric order.
 **Plans:** 3 plans
 
 Plans:
-- [ ] 01-01-PLAN.md -- Create TogetherProvider with two-pass PFQS generation and update shared types
+- [x] 01-01-PLAN.md -- Create TogetherProvider with two-pass PFQS generation and update shared types
 - [ ] 01-02-PLAN.md -- Delete dead code (GeminiProvider, PromptOptimizer) and simplify frontend to 4 types / 50 max
 - [ ] 01-03-PLAN.md -- Rewrite ProviderFactory, update IPC handlers, remove Gemini SDK, verify end-to-end
 
