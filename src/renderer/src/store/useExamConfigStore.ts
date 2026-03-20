@@ -26,23 +26,17 @@ import { create } from 'zustand'
 /**
  * Question Type Enum
  *
- * All supported question types from CLAUDE.md:
+ * Supported question types for the two-pass PFQS generation architecture:
  * - Multiple Choice
  * - True/False
  * - Fill in the Blanks
  * - Short Answer
- * - Essay
- * - Matching
- * - Identification
  */
 export type QuestionType =
   | 'multipleChoice'
   | 'trueFalse'
   | 'fillInTheBlanks'
   | 'shortAnswer'
-  | 'essay'
-  | 'matching'
-  | 'identification'
 
 /**
  * Question Type Configuration
@@ -60,37 +54,22 @@ export const QUESTION_TYPES: Record<
   multipleChoice: {
     label: 'Multiple Choice',
     description: 'Questions with multiple answer options, one correct answer',
-    icon: '✓',
+    icon: 'check-circle',
   },
   trueFalse: {
     label: 'True/False',
     description: 'Questions with true or false answers',
-    icon: '⚖',
+    icon: 'scale',
   },
   fillInTheBlanks: {
     label: 'Fill in the Blanks',
     description: 'Questions with missing words to complete',
-    icon: '___',
+    icon: 'text-cursor',
   },
   shortAnswer: {
     label: 'Short Answer',
     description: 'Questions requiring brief written responses',
-    icon: '✍',
-  },
-  essay: {
-    label: 'Essay',
-    description: 'Questions requiring detailed written responses',
-    icon: '📝',
-  },
-  matching: {
-    label: 'Matching',
-    description: 'Match items from two columns',
-    icon: '⇄',
-  },
-  identification: {
-    label: 'Identification',
-    description: 'Identify or name specific items',
-    icon: '🔍',
+    icon: 'pencil',
   },
 }
 
@@ -140,15 +119,14 @@ export const DIFFICULTY_LEVELS: Record<
 /**
  * Validation Rules
  *
- * Updated for Groq backend integration:
- * - MAX_TOTAL_ITEMS reduced from 200 to 100 (proven reliable with Groq)
- * - Tested with 30, 50, and 100 item exams (100% success rate)
+ * Capped at 50 questions based on research showing 50 unique concepts
+ * is optimal for the two-pass PFQS architecture.
  */
 export const EXAM_CONFIG_RULES = {
   MIN_TOTAL_ITEMS: 10,
-  MAX_TOTAL_ITEMS: 100, // Changed from 200 to 100 for Groq reliability
+  MAX_TOTAL_ITEMS: 50,
   MIN_ITEMS_PER_TYPE: 0,
-  MAX_ITEMS_PER_TYPE: 100, // Changed from 200 to 100
+  MAX_ITEMS_PER_TYPE: 50,
 }
 
 /**
@@ -190,9 +168,6 @@ const initialQuestionTypes: Record<QuestionType, number> = {
   trueFalse: 0,
   fillInTheBlanks: 0,
   shortAnswer: 0,
-  essay: 0,
-  matching: 0,
-  identification: 0,
 }
 
 /**
@@ -327,7 +302,7 @@ export const useExamConfigStore = create<ExamConfigState>((set, get) => ({
    *
    * Valid if:
    * - Total questions >= MIN_TOTAL_ITEMS (10)
-   * - Total questions <= MAX_TOTAL_ITEMS (100)
+   * - Total questions <= MAX_TOTAL_ITEMS (50)
    * - At least one question type has quantity > 0
    */
   isQuestionTypesValid: () => {
