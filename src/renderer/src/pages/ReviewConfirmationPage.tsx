@@ -26,9 +26,14 @@ import { useFileUploadStore } from '../store/useFileUploadStore'
 
 export function ReviewConfirmationPage() {
   const navigate = useNavigate()
-  const [groqStatus, setGroqStatus] = useState<{ connected: boolean; message: string }>({
+  const [aiStatus, setAiStatus] = useState<{ 
+    connected: boolean; 
+    message: string; 
+    provider?: string;
+    providerInfo?: any;
+  }>({
     connected: false,
-    message: 'Checking connection...'
+    message: 'Checking AI connection...'
   })
 
   // Get state from stores
@@ -36,24 +41,48 @@ export function ReviewConfirmationPage() {
   const totalQuestions = useExamConfigStore(state => state.getTotalQuestions())
   const difficultyDistribution = useExamConfigStore(state => state.difficultyDistribution)
 
-  // Check Groq backend connection
+  // Check AI provider connection
   useEffect(() => {
-    const checkGroqConnection = async () => {
+    const checkAiConnection = async () => {
       try {
-        const result = await window.electron.groq.testConnection()
-        setGroqStatus({
-          connected: result.success,
-          message: result.success ? 'Connected to Groq AI' : result.message
-        })
-      } catch {
-        setGroqStatus({
+        // Test AI provider connection
+        const connectionResult = await window.electron.ai.testConnection()
+        
+        if (connectionResult.success) {
+          // Get provider info for display
+          const providerInfoResult = await window.electron.ai.getProviderInfo()
+          
+          if (providerInfoResult.success) {
+            setAiStatus({
+              connected: true,
+              message: `Connected to Together AI`,
+              provider: providerInfoResult.providerInfo.provider || 'together-ai',
+              providerInfo: providerInfoResult.providerInfo
+            })
+          } else {
+            setAiStatus({
+              connected: true,
+              message: 'Connected to AI provider',
+              provider: 'together-ai'
+            })
+          }
+        } else {
+          setAiStatus({
+            connected: false,
+            message: connectionResult.message || 'Failed to connect to AI provider',
+            providerInfo: connectionResult.details ? { details: connectionResult.details } : undefined
+          })
+        }
+      } catch (error) {
+        console.error('AI connection test failed:', error)
+        setAiStatus({
           connected: false,
-          message: 'Failed to connect to Groq backend'
+          message: 'Failed to connect to AI backend'
         })
       }
     }
 
-    checkGroqConnection()
+    checkAiConnection()
   }, [])
 
   // Validate that user came from proper workflow
@@ -81,17 +110,17 @@ export function ReviewConfirmationPage() {
     }
   }, [uploadedFiles, totalQuestions, difficultyDistribution, navigate])
 
-  // Calculate estimates for Groq backend
-  const estimatedProcessingTime = Math.max(8, Math.ceil(totalQuestions * 0.08)) // ~8 seconds base, 0.08s per question
-  const estimatedCost = 'Free' // Groq backend is completely free
+  // Calculate estimates for Together AI backend (two-pass generation is slightly slower)
+  const estimatedProcessingTime = Math.max(15, Math.ceil(totalQuestions * 0.3)) // ~15s base, 0.3s per question for two-pass
+  const estimatedCost = 'Free' // Together AI free tier
 
   const handleBack = () => {
     navigate('/create-exam/difficulty')
   }
 
   const handleGenerate = async () => {
-    if (!groqStatus.connected) {
-      alert('Groq AI backend not connected. Please check your environment configuration.')
+    if (!aiStatus.connected) {
+      alert('AI provider not connected. Please check your environment configuration.')
       return
     }
 
@@ -149,35 +178,37 @@ export function ReviewConfirmationPage() {
           <CardDescription>Processing information</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Groq AI Provider Info */}
+          {/* AI Provider Info */}
           <div className={`flex items-center justify-between p-4 border rounded-lg ${
-            groqStatus.connected 
+            aiStatus.connected 
               ? 'bg-green-50 border-green-200' 
               : 'bg-orange-50 border-orange-200'
           }`}>
             <div className="flex items-center gap-3">
               <div className={`p-2 rounded-lg ${
-                groqStatus.connected ? 'bg-green-100' : 'bg-orange-100'
+                aiStatus.connected ? 'bg-green-100' : 'bg-orange-100'
               }`}>
-                {groqStatus.connected ? (
+                {aiStatus.connected ? (
                   <CheckCircle className="h-5 w-5 text-green-600" />
                 ) : (
                   <Sparkles className="h-5 w-5 text-orange-600" />
                 )}
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-900">Using Groq AI (Backend)</p>
+                <p className="text-sm font-medium text-gray-900">
+                  Using Together AI (Backend)
+                </p>
                 <p className="text-xs text-gray-600">
-                  Fast, reliable AI with llama-3.3-70b-versatile - completely free
+                  Two-pass generation with Qwen3-235B for higher quality exams
                 </p>
               </div>
             </div>
             <div className={`text-xs font-medium px-2 py-1 rounded ${
-              groqStatus.connected 
+              aiStatus.connected 
                 ? 'bg-green-100 text-green-700' 
                 : 'bg-orange-100 text-orange-700'
             }`}>
-              {groqStatus.connected ? 'Connected' : 'Disconnected'}
+              {aiStatus.connected ? 'Connected' : 'Disconnected'}
             </div>
           </div>
 
@@ -195,16 +226,19 @@ export function ReviewConfirmationPage() {
             </div>
           </div>
 
-          {/* Warning if Groq not connected */}
-          {!groqStatus.connected && (
+          {/* Warning if AI provider not connected */}
+          {!aiStatus.connected && (
             <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-lg">
               <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
               <div className="text-sm">
-                <p className="font-medium text-red-900 mb-1">Groq AI Backend Not Connected</p>
-                <p className="text-red-700 mb-2">{groqStatus.message}</p>
+                <p className="font-medium text-red-900 mb-1">AI Provider Not Connected</p>
+                <p className="text-red-700 mb-2">{aiStatus.message}</p>
+                {aiStatus.providerInfo?.details && (
+                  <p className="text-red-600 text-xs mb-2 font-mono">{aiStatus.providerInfo.details}</p>
+                )}
                 <p className="text-red-700 text-xs">
-                  Please ensure your GROQ_API_KEY is properly set in the .env.local file.
-                  Check the terminal for detailed error messages.
+                  Please ensure your TOGETHER_API_KEY is properly set in the .env.local file.
+                  Get one at https://api.together.xyz/settings/api-keys
                 </p>
               </div>
             </div>
@@ -220,7 +254,7 @@ export function ReviewConfirmationPage() {
 
         <Button
           onClick={handleGenerate}
-          disabled={!groqStatus.connected}
+          disabled={!aiStatus.connected}
           className="flex items-center gap-2"
         >
           <Sparkles className="h-4 w-4" />

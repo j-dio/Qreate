@@ -69,8 +69,8 @@ const TopicPlanSchema = z.object({
 export class TogetherProvider {
   private primaryClient: OpenAI
   private fallbackClient: OpenAI | null
-  private primaryModel = 'Qwen/Qwen3-235B-A22B-Instruct-2507'
-  private fallbackModel = 'qwen/qwen3-32b'
+  private primaryModel = 'Qwen/Qwen3-235B-A22B-Instruct-2507-tput'
+  private fallbackModel = 'llama-3.3-70b-versatile'
 
   constructor(togetherApiKey: string, groqApiKey?: string) {
     this.primaryClient = new OpenAI({
@@ -91,6 +91,9 @@ export class TogetherProvider {
   // ----------------------------------------------------------
 
   async testConnection(): Promise<{ success: boolean; message: string; details?: string }> {
+    console.log('[TogetherProvider] Testing primary connection...',
+      { model: this.primaryModel, hasFallback: !!this.fallbackClient })
+
     try {
       await this.primaryClient.chat.completions.create({
         model: this.primaryModel,
@@ -98,10 +101,14 @@ export class TogetherProvider {
         max_tokens: 50,
         temperature: 0.0,
       })
+      console.log('[TogetherProvider] Primary connection successful')
       return { success: true, message: `Connected to Together AI (${this.primaryModel})` }
     } catch (primaryError: any) {
+      console.error('[TogetherProvider] Primary connection failed:', primaryError.message)
+
       // Try fallback if available
       if (this.fallbackClient) {
+        console.log('[TogetherProvider] Trying fallback (Groq)...', { model: this.fallbackModel })
         try {
           await this.fallbackClient.chat.completions.create({
             model: this.fallbackModel,
@@ -109,12 +116,14 @@ export class TogetherProvider {
             max_tokens: 50,
             temperature: 0.0,
           })
+          console.log('[TogetherProvider] Fallback connection successful')
           return {
             success: true,
             message: `Together AI unavailable, fallback connected (${this.fallbackModel})`,
             details: `Primary error: ${primaryError.message}`,
           }
         } catch (fallbackError: any) {
+          console.error('[TogetherProvider] Fallback also failed:', fallbackError.message)
           return {
             success: false,
             message: 'Both providers unavailable',
