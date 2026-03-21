@@ -41,6 +41,8 @@ import { useAppStore } from '../store/useAppStore'
 interface LocationState {
   exam: string // Raw exam content
   providerUsed?: string // Which AI provider completed the generation
+  actualQuestions?: number // Concepts extracted from source material
+  requestedQuestions?: number // What the user asked for
 }
 
 /**
@@ -207,6 +209,25 @@ export function ExamSuccessPage() {
           </CardContent>
         </Card>
 
+        {/* Source material warning — shown when AI couldn't reach the requested count */}
+        {state.actualQuestions !== undefined &&
+          state.requestedQuestions !== undefined &&
+          state.actualQuestions < state.requestedQuestions && (
+            <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+              <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div className="text-sm">
+                <p className="font-medium text-amber-900">Fewer questions than requested</p>
+                <p className="text-amber-700 mt-1">
+                  Your source material contained enough distinct content for{' '}
+                  <span className="font-semibold">{state.actualQuestions} questions</span>, but you
+                  requested {state.requestedQuestions}. The exam was generated using only concepts
+                  found in your file(s) — no content was invented. To get more questions, upload
+                  additional or more detailed study materials.
+                </p>
+              </div>
+            </div>
+          )}
+
         {/* Exam Details */}
         <Card>
           <CardHeader>
@@ -229,7 +250,7 @@ export function ExamSuccessPage() {
               </div>
               <div>
                 <span className="text-muted-foreground">AI Provider:</span>
-                <span className="ml-2 font-medium">Groq AI (Backend)</span>
+                <span className="ml-2 font-medium">{state.providerUsed || 'Together AI'} (Backend)</span>
               </div>
             </div>
             

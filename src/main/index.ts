@@ -615,7 +615,7 @@ async function registerIpcHandlers(): Promise<void> {
       }
 
       try {
-        const { content: examContent, providerUsed } = await providerFactory.generateExam(config, sourceText)
+        const { content: examContent, providerUsed, actualQuestions } = await providerFactory.generateExam(config, sourceText)
 
         // Parse the exam content into structured format
         console.log('[IPC] Parsing generated exam content...')
@@ -649,6 +649,8 @@ async function registerIpcHandlers(): Promise<void> {
           success: true,
           content: examContent,
           providerUsed,
+          actualQuestions,
+          requestedQuestions: config.totalQuestions,
           exam: exam,
           usageStatus: updatedUsage,
         }

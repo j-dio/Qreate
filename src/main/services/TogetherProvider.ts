@@ -72,6 +72,7 @@ export class TogetherProvider {
   private primaryModel = 'Qwen/Qwen3-235B-A22B-Instruct-2507-tput'
   private fallbackModel = 'llama-3.3-70b-versatile'
   private lastUsedProvider = 'Together AI'
+  private lastActualQuestions = 0
 
   constructor(togetherApiKey: string, groqApiKey?: string) {
     this.primaryClient = new OpenAI({
@@ -145,6 +146,10 @@ export class TogetherProvider {
     return this.lastUsedProvider
   }
 
+  getLastActualQuestions(): number {
+    return this.lastActualQuestions
+  }
+
   getModelInfo(): {
     primaryModel: string
     fallbackModel: string
@@ -179,6 +184,7 @@ export class TogetherProvider {
     let plan: TopicPlan
     try {
       plan = await this.callWithFallback(client => this.extractTopicPlan(client, cappedConfig, sourceText))
+      this.lastActualQuestions = plan.concepts.length
     } catch (error: any) {
       throw new Error(`Pass 1 (topic planning) failed: ${error.message}`)
     }
