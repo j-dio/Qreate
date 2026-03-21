@@ -174,7 +174,7 @@ export function ExamGenerationProgressPage() {
         // Navigate to success page with exam data
         setTimeout(() => {
           navigate('/create-exam/success', {
-            state: { exam: examResult.content },
+            state: { exam: examResult.content, providerUsed: examResult.providerUsed },
           })
         }, 2000)
       } else {

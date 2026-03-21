@@ -39,7 +39,8 @@ import { useAppStore } from '../store/useAppStore'
  * State passed from ExamGenerationProgressPage
  */
 interface LocationState {
-  exam: string // Raw exam content from Groq
+  exam: string // Raw exam content
+  providerUsed?: string // Which AI provider completed the generation
 }
 
 /**
@@ -101,7 +102,7 @@ export function ExamSuccessPage() {
         metadata: {
           generatedAt: new Date().toISOString(),
           sourceFiles: uploadedFiles.map(f => f.name),
-          aiProvider: 'Groq AI (Backend)'
+          aiProvider: `${state.providerUsed || 'Together AI'} (Backend)`
         }
       }
 

@@ -33,8 +33,10 @@ export class ProviderFactory {
     return this.provider
   }
 
-  async generateExam(config: ExamGenerationConfig, sourceText: string): Promise<string> {
-    return this.getCurrentProvider().generateExam(config, sourceText)
+  async generateExam(config: ExamGenerationConfig, sourceText: string): Promise<{ content: string; providerUsed: string }> {
+    const provider = this.getCurrentProvider()
+    const content = await provider.generateExam(config, sourceText)
+    return { content, providerUsed: provider.getLastUsedProvider() }
   }
 
   async testConnection(): Promise<{ success: boolean; message: string; details?: string }> {

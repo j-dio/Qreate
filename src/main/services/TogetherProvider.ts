@@ -71,6 +71,7 @@ export class TogetherProvider {
   private fallbackClient: OpenAI | null
   private primaryModel = 'Qwen/Qwen3-235B-A22B-Instruct-2507-tput'
   private fallbackModel = 'llama-3.3-70b-versatile'
+  private lastUsedProvider = 'Together AI'
 
   constructor(togetherApiKey: string, groqApiKey?: string) {
     this.primaryClient = new OpenAI({
@@ -138,6 +139,10 @@ export class TogetherProvider {
         details: primaryError.message,
       }
     }
+  }
+
+  getLastUsedProvider(): string {
+    return this.lastUsedProvider
   }
 
   getModelInfo(): {
@@ -221,12 +226,12 @@ export class TogetherProvider {
     const systemPrompt =
       'You are an expert educational assessment planner. Output valid JSON only. Do not include markdown or code fences.'
 
-    const userPrompt = `Analyze the following source material and extract EXACTLY ${totalQuestions} unique concepts for a practice exam.
+    const userPrompt = `Analyze the following source material and extract UP TO ${totalQuestions} unique concepts for a practice exam.
 
-QUESTION TYPE DISTRIBUTION:
+QUESTION TYPE DISTRIBUTION (target, scale down proportionally if fewer concepts are available):
 ${typeLines}
 
-DIFFICULTY DISTRIBUTION (3-level):
+DIFFICULTY DISTRIBUTION (3-level, scale down proportionally if fewer concepts are available):
 ${diffLines}
 
 REQUIREMENTS:
@@ -234,12 +239,12 @@ REQUIREMENTS:
 - Assign each concept exactly one question type, one difficulty level, and one Bloom's taxonomy level.
 - For multipleChoice concepts, assign an "answerPosition" field (A, B, C, or D) cycling evenly to prevent answer bias.
 - Do NOT repeat any concept. Do NOT assign the same topic to multiple questions.
-- Concepts must be extracted directly from the source material — no invented topics.
+- Concepts must be extracted ONLY from the source material provided. NEVER invent or add concepts from outside the source material to reach the target count. If the material only supports 15 or 30 distinct concepts, output only that many.
 
 OUTPUT FORMAT (JSON only):
 {
   "topic": "Detected subject/topic from the material",
-  "totalConcepts": ${totalQuestions},
+  "totalConcepts": <actual number of concepts extracted>,
   "concepts": [
     { "id": 1, "concept": "Specific concept name", "type": "multipleChoice", "difficulty": "moderate", "bloomLevel": "understand", "answerPosition": "A" },
     { "id": 2, "concept": "Another specific concept", "type": "trueFalse", "difficulty": "easy", "bloomLevel": "remember" },
@@ -258,7 +263,7 @@ ${sourceText.slice(0, 80000)}`
       ],
       response_format: { type: 'json_object' },
       temperature: 0.3,
-      max_tokens: 2048,
+      max_tokens: 4096,
       top_p: 0.85,
     })
 
@@ -315,6 +320,7 @@ RULES:
 - For True/False: state a clear, unambiguous fact from the material.
 - For Fill-in-the-Blanks: use "___" for the blank. Keep blanks to key terms only.
 - For Short Answer: require 2-4 sentence responses that apply or analyze content.
+- CRITICAL FORMATTING RULE: Group ALL questions of the same type together under ONE section header. Write the section header ONCE at the top of that group. Do NOT repeat the section header (e.g., "Multiple Choice:") before each individual question.
 
 OUTPUT FORMAT:
 General Topic: [extracted topic]
@@ -381,7 +387,9 @@ ${sourceText.slice(0, 80000)}`
     // Try primary
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
-        return await fn(this.primaryClient)
+        const result = await fn(this.primaryClient)
+        this.lastUsedProvider = 'Together AI'
+        return result
       } catch (error: any) {
         if (attempt < maxRetries) {
           const delay = baseDelay * Math.pow(2, attempt)
@@ -394,7 +402,9 @@ ${sourceText.slice(0, 80000)}`
     if (this.fallbackClient) {
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
-          return await fn(this.fallbackClient)
+          const result = await fn(this.fallbackClient)
+          this.lastUsedProvider = 'Groq AI'
+          return result
         } catch (error: any) {
           if (attempt < maxRetries) {
             const delay = baseDelay * Math.pow(2, attempt)
