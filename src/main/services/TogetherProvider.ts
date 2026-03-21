@@ -327,6 +327,8 @@ RULES:
 - For Fill-in-the-Blanks: use "___" for the blank. Keep blanks to key terms only.
 - For Short Answer: require 2-4 sentence responses that apply or analyze content.
 - CRITICAL FORMATTING RULE: Group ALL questions of the same type together under ONE section header. Write the section header ONCE at the top of that group. Do NOT repeat the section header (e.g., "Multiple Choice:") before each individual question.
+- CRITICAL NUMBERING RULE: Number every question sequentially from 1 to ${plan.totalConcepts} from the top of the exam to the bottom. Completely ignore the original "id" field from the JSON plan — it is for internal planning only and must NOT appear in the output.
+- The Answer Key MUST use this same sequential numbering (e.g., "1. A", "2. True"). Do NOT put the Answer Key in a markdown table — use a plain text list only.
 
 OUTPUT FORMAT:
 General Topic: [extracted topic]
