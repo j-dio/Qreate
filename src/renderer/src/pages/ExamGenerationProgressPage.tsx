@@ -260,7 +260,9 @@ export function ExamGenerationProgressPage() {
         <CardHeader>
           <CardTitle>Progress</CardTitle>
           <CardDescription>
-            {progress.currentFileIndex + 1} of {progress.totalFiles} files processed
+            {progress.stage === 'generating_exam'
+              ? 'Files extracted — AI is generating your exam...'
+              : `${Math.min(progress.currentFileIndex + 1, progress.totalFiles)} of ${progress.totalFiles} files processed`}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -269,36 +271,46 @@ export function ExamGenerationProgressPage() {
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium text-gray-700">Overall Progress</span>
               <span className="text-sm font-semibold text-blue-600">
-                {progressPercentage.toFixed(0)}%
+                {progress.stage === 'generating_exam' ? 'Generating...' : `${progressPercentage.toFixed(0)}%`}
               </span>
             </div>
             <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-blue-600 transition-all duration-500 ease-out"
-                style={{ width: `${progressPercentage}%` }}
-              />
+              {progress.stage === 'generating_exam' ? (
+                <div className="h-full w-full bg-blue-400 animate-pulse" />
+              ) : (
+                <div
+                  className="h-full bg-blue-600 transition-all duration-500 ease-out"
+                  style={{ width: `${progressPercentage}%` }}
+                />
+              )}
             </div>
           </div>
 
           {/* Stats Grid */}
           <div className="grid grid-cols-3 gap-4">
             <div className="p-4 bg-gray-50 rounded-lg text-center">
-              <p className="text-xs text-gray-500 mb-1">Questions Generated</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {progress.questionsGenerated}
-                <span className="text-sm text-gray-500">/{progress.totalQuestionsNeeded}</span>
-              </p>
+              <p className="text-xs text-gray-500 mb-1">Questions Requested</p>
+              {progress.stage === 'generating_exam' ? (
+                <p className="text-sm font-medium text-blue-600 animate-pulse mt-1">Generating...</p>
+              ) : (
+                <p className="text-2xl font-bold text-gray-900">
+                  {progress.questionsGenerated}
+                  <span className="text-sm text-gray-500">/{progress.totalQuestionsNeeded}</span>
+                </p>
+              )}
             </div>
             <div className="p-4 bg-gray-50 rounded-lg text-center">
               <p className="text-xs text-gray-500 mb-1">Current File</p>
               <p className="text-sm font-medium text-gray-900 truncate">
-                {progress.currentFile || 'Initializing...'}
+                {progress.stage === 'generating_exam' ? 'AI processing...' : (progress.currentFile || 'Initializing...')}
               </p>
             </div>
             <div className="p-4 bg-gray-50 rounded-lg text-center">
               <p className="text-xs text-gray-500 mb-1">Time Remaining</p>
               <p className="text-2xl font-bold text-gray-900">
-                {formatTimeRemaining(progress.estimatedTimeRemaining)}
+                {progress.stage === 'generating_exam'
+                  ? `~${Math.max(1, Math.round(progress.totalQuestionsNeeded / 15))}m`
+                  : formatTimeRemaining(progress.estimatedTimeRemaining)}
               </p>
             </div>
           </div>
@@ -308,9 +320,10 @@ export function ExamGenerationProgressPage() {
             <h3 className="text-sm font-medium text-gray-700 mb-3">Files</h3>
             <div className="space-y-2">
               {uploadedFiles.map((file, index) => {
-                const isProcessing = index === progress.currentFileIndex && status === 'processing'
-                const isCompleted = index < progress.currentFileIndex
-                const isPending = index > progress.currentFileIndex
+                const isGeneratingAI = progress.stage === 'generating_exam'
+                const isProcessing = !isGeneratingAI && index === progress.currentFileIndex && status === 'processing'
+                const isCompleted = !isGeneratingAI && index < progress.currentFileIndex
+                const isPending = !isGeneratingAI && index > progress.currentFileIndex
 
                 return (
                   <div
@@ -320,12 +333,15 @@ export function ExamGenerationProgressPage() {
                         ? 'bg-blue-50 border border-blue-200'
                         : isCompleted
                           ? 'bg-green-50 border border-green-200'
-                          : 'bg-gray-50 border border-gray-200'
+                          : isGeneratingAI
+                            ? 'bg-gray-50 border border-gray-300'
+                            : 'bg-gray-50 border border-gray-200'
                     }`}
                   >
                     <div>
                       {isProcessing && <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />}
                       {isCompleted && <CheckCircle className="h-5 w-5 text-green-600" />}
+                      {isGeneratingAI && <CheckCircle className="h-5 w-5 text-gray-400" />}
                       {isPending && <FileText className="h-5 w-5 text-gray-400" />}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -337,9 +353,23 @@ export function ExamGenerationProgressPage() {
                     {isCompleted && (
                       <span className="text-xs font-medium text-green-600">Complete</span>
                     )}
+                    {isGeneratingAI && (
+                      <span className="text-xs font-medium text-gray-500">Extracted</span>
+                    )}
                   </div>
                 )
               })}
+              {progress.stage === 'generating_exam' && (
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-blue-50 border border-blue-200">
+                  <Loader2 className="h-5 w-5 text-blue-600 animate-spin flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-blue-900">
+                      AI generating {progress.totalQuestionsNeeded} questions (two-pass)
+                    </p>
+                  </div>
+                  <span className="text-xs font-medium text-blue-600">In progress...</span>
+                </div>
+              )}
             </div>
           </div>
         </CardContent>

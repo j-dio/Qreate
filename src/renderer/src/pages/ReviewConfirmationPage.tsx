@@ -110,8 +110,9 @@ export function ReviewConfirmationPage() {
     }
   }, [uploadedFiles, totalQuestions, difficultyDistribution, navigate])
 
-  // Calculate estimates for Together AI backend (two-pass generation is slightly slower)
-  const estimatedProcessingTime = Math.max(15, Math.ceil(totalQuestions * 0.3)) // ~15s base, 0.3s per question for two-pass
+  // Calculate estimates for Together AI backend (Qwen3-235B two-pass is slow — ~1 min per 15 questions)
+  const estimatedMinutes = Math.max(1, Math.round(totalQuestions / 15))
+  const estimatedTime = estimatedMinutes === 1 ? '~1 minute' : `~${estimatedMinutes} minutes`
   const estimatedCost = 'Free' // Together AI free tier
 
   const handleBack = () => {
@@ -216,9 +217,7 @@ export function ReviewConfirmationPage() {
           <div className="grid grid-cols-2 gap-4">
             <div className="p-4 bg-gray-50 rounded-lg">
               <p className="text-xs text-gray-500 mb-1">Estimated Time</p>
-              <p className="text-lg font-semibold text-gray-900">
-                ~{estimatedProcessingTime} seconds
-              </p>
+              <p className="text-lg font-semibold text-gray-900">{estimatedTime}</p>
             </div>
             <div className="p-4 bg-gray-50 rounded-lg">
               <p className="text-xs text-gray-500 mb-1">Estimated Cost</p>
