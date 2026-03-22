@@ -81,7 +81,7 @@ export function ExamTypeSelectionPage() {
         </div>
         <h2 className="text-3xl font-extrabold tracking-tight">Configure Question Types</h2>
         <p className="text-muted-foreground mt-1">
-          Choose which types of questions you want and how many of each
+          Choose which types of questions to include and set your total question cap
         </p>
       </div>
 
@@ -96,10 +96,10 @@ export function ExamTypeSelectionPage() {
                 Use <strong>Quick Presets</strong> for common exam configurations
               </li>
               <li>
-                Mix different types for comprehensive assessment (e.g., Multiple Choice + Essays)
+                Check multiple types — the AI picks the best fit for each concept automatically
               </li>
-              <li>Total must be between 10-200 questions</li>
-              <li>You can adjust quantities with +/- buttons or type directly</li>
+              <li>Total cap must be between 10–50 questions</li>
+              <li>At least one question type must be selected</li>
             </ul>
           </div>
         </CardContent>
@@ -123,7 +123,7 @@ export function ExamTypeSelectionPage() {
           className="gap-2"
           title={
             !canProceed
-              ? 'Configure at least 10 questions to continue'
+              ? 'Select at least one type and set 10–50 questions to continue'
               : 'Proceed to difficulty distribution'
           }
         >

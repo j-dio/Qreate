@@ -256,14 +256,13 @@ export function ExamSuccessPage() {
             
             {/* Question type breakdown */}
             <div className="mt-4">
-              <p className="text-sm text-muted-foreground mb-2">Question Types:</p>
+              <p className="text-sm text-muted-foreground mb-2">Allowed Question Types:</p>
               <div className="grid grid-cols-2 gap-2 text-xs">
                 {Object.entries(questionTypes)
-                  .filter(([_, count]) => count > 0)
-                  .map(([type, count]) => (
-                    <div key={type} className="flex justify-between">
-                      <span className="capitalize">{type.replace(/([A-Z])/g, ' $1').trim()}:</span>
-                      <span className="font-medium">{count}</span>
+                  .filter(([_, enabled]) => enabled)
+                  .map(([type]) => (
+                    <div key={type} className="flex items-center gap-1">
+                      <span className="capitalize">{type.replace(/([A-Z])/g, ' $1').trim()}</span>
                     </div>
                   ))}
               </div>

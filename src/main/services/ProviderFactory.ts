@@ -36,14 +36,13 @@ export class ProviderFactory {
   async generateExam(
     config: ExamGenerationConfig,
     sourceText: string
-  ): Promise<{ content: string; providerUsed: string; actualQuestions: number; warning?: string }> {
+  ): Promise<{ content: string; providerUsed: string; actualQuestions: number }> {
     const provider = this.getCurrentProvider()
-    const { content, warning } = await provider.generateExam(config, sourceText)
+    const { content } = await provider.generateExam(config, sourceText)
     return {
       content,
       providerUsed: provider.getLastUsedProvider(),
       actualQuestions: provider.getLastActualQuestions(),
-      warning,
     }
   }
 

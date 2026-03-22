@@ -1,123 +1,127 @@
 /**
  * Exam Type Selection Component
  *
- * Main component for configuring question types and quantities.
- *
- * Features:
- * - All question type inputs
- * - Real-time total counter
- * - Validation feedback
- * - Quick preset options
- * - Clear/reset functionality
- *
- * User Experience:
- * - See all available question types at once
- * - Adjust quantities easily with +/- buttons or direct input
- * - Get immediate feedback on total count
- * - Use presets for common exam configurations
- * - Clear validation on min/max constraints
+ * Users select which question types to include (checkboxes) and set a
+ * total question cap. Pass 1 of the AI pipeline will autonomously assign
+ * the best-fit type from the allowed set for each extracted concept.
  */
 
-import { AlertCircle, CheckCircle2, RotateCcw, Sparkles } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { AlertCircle, CheckCircle2, RotateCcw, Sparkles, Minus, Plus } from 'lucide-react'
 import {
   useExamConfigStore,
   QUESTION_TYPES,
   EXAM_CONFIG_RULES,
   type QuestionType,
 } from '../store/useExamConfigStore'
-import { QuestionTypeInput } from './QuestionTypeInput'
 import { Button } from './ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card'
+import { Input } from './ui/Input'
 
 /**
  * Preset Configurations
- *
- * Quick setup options for common exam types
  */
-const PRESETS = {
+const PRESETS: Record<
+  string,
+  {
+    name: string
+    description: string
+    types: Record<QuestionType, boolean>
+    totalQuestions: number
+  }
+> = {
   quickQuiz: {
     name: 'Quick Quiz',
-    description: '20 questions, mostly multiple choice',
-    config: {
-      multipleChoice: 15,
-      trueFalse: 5,
-      fillInTheBlanks: 0,
-      shortAnswer: 0,
-    },
+    description: '20 questions — multiple choice & true/false',
+    types: { multipleChoice: true, trueFalse: true, fillInTheBlanks: false, shortAnswer: false },
+    totalQuestions: 20,
   },
   standardExam: {
     name: 'Standard Exam',
-    description: '40 questions, mixed types',
-    config: {
-      multipleChoice: 20,
-      trueFalse: 10,
-      fillInTheBlanks: 5,
-      shortAnswer: 5,
-    },
+    description: '35 questions — all types',
+    types: { multipleChoice: true, trueFalse: true, fillInTheBlanks: true, shortAnswer: true },
+    totalQuestions: 35,
   },
   comprehensive: {
     name: 'Comprehensive',
-    description: '50 questions, all types',
-    config: {
-      multipleChoice: 20,
-      trueFalse: 10,
-      fillInTheBlanks: 10,
-      shortAnswer: 10,
-    },
+    description: '50 questions — all types',
+    types: { multipleChoice: true, trueFalse: true, fillInTheBlanks: true, shortAnswer: true },
+    totalQuestions: 50,
   },
+}
+
+const ICON_COLORS: Record<string, string> = {
+  'check-circle': 'bg-emerald-100 text-emerald-700',
+  scale: 'bg-cyan-100 text-cyan-700',
+  'text-cursor': 'bg-amber-100 text-amber-700',
+  pencil: 'bg-rose-100 text-rose-700',
 }
 
 export function ExamTypeSelection() {
   const {
     questionTypes,
-    setQuestionTypeQuantity,
+    totalQuestions,
+    setQuestionTypeEnabled,
+    setTotalQuestions,
     resetQuestionTypes,
-    getTotalQuestions,
     isQuestionTypesValid,
   } = useExamConfigStore()
 
-  const totalQuestions = getTotalQuestions()
+  const [inputValue, setInputValue] = useState<string>(totalQuestions.toString())
+  const [isFocused, setIsFocused] = useState(false)
+
+  // Sync input display when store value changes externally (e.g. preset applied)
+  useEffect(() => {
+    if (!isFocused) {
+      setInputValue(totalQuestions.toString())
+    }
+  }, [totalQuestions, isFocused])
+
   const isValid = isQuestionTypesValid()
+  const anyEnabled = Object.values(questionTypes).some(v => v)
 
-  /**
-   * Apply a preset configuration
-   */
-  const applyPreset = (presetKey: keyof typeof PRESETS) => {
-    const preset = PRESETS[presetKey]
-    Object.entries(preset.config).forEach(([type, quantity]) => {
-      setQuestionTypeQuantity(type as QuestionType, quantity)
+  const applyPreset = (key: string) => {
+    const preset = PRESETS[key]
+    ;(Object.keys(preset.types) as QuestionType[]).forEach(type => {
+      setQuestionTypeEnabled(type, preset.types[type])
     })
+    setTotalQuestions(preset.totalQuestions)
   }
 
-  /**
-   * Get validation status message
-   */
+  const handleCountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value
+    setInputValue(raw)
+    const n = parseInt(raw, 10)
+    if (!isNaN(n)) {
+      setTotalQuestions(n)
+    }
+  }
+
+  const handleCountBlur = () => {
+    setIsFocused(false)
+    const n = parseInt(inputValue, 10)
+    if (isNaN(n)) {
+      setTotalQuestions(EXAM_CONFIG_RULES.MIN_TOTAL_ITEMS)
+    } else {
+      setTotalQuestions(n) // store clamps to [10, 50]
+    }
+  }
+
+  const handleDecrement = () => setTotalQuestions(totalQuestions - 1)
+  const handleIncrement = () => setTotalQuestions(totalQuestions + 1)
+
   const getStatusMessage = () => {
-    if (totalQuestions === 0) {
-      return `Add at least ${EXAM_CONFIG_RULES.MIN_TOTAL_ITEMS} questions to continue`
-    }
-
-    if (totalQuestions < EXAM_CONFIG_RULES.MIN_TOTAL_ITEMS) {
-      return `Add ${EXAM_CONFIG_RULES.MIN_TOTAL_ITEMS - totalQuestions} more question(s) (minimum ${EXAM_CONFIG_RULES.MIN_TOTAL_ITEMS})`
-    }
-
-    if (totalQuestions > EXAM_CONFIG_RULES.MAX_TOTAL_ITEMS) {
-      return `Remove ${totalQuestions - EXAM_CONFIG_RULES.MAX_TOTAL_ITEMS} question(s) (maximum ${EXAM_CONFIG_RULES.MAX_TOTAL_ITEMS})`
-    }
-
+    if (!anyEnabled) return 'Select at least one question type to continue'
+    if (totalQuestions < EXAM_CONFIG_RULES.MIN_TOTAL_ITEMS)
+      return `Minimum ${EXAM_CONFIG_RULES.MIN_TOTAL_ITEMS} questions required`
+    if (totalQuestions > EXAM_CONFIG_RULES.MAX_TOTAL_ITEMS)
+      return `Maximum ${EXAM_CONFIG_RULES.MAX_TOTAL_ITEMS} questions allowed`
     return 'Configuration valid!'
-  }
-
-  /**
-   * Get progress percentage for visual feedback
-   */
-  const getProgressPercentage = () => {
-    return Math.min((totalQuestions / EXAM_CONFIG_RULES.MAX_TOTAL_ITEMS) * 100, 100)
   }
 
   return (
     <div className="space-y-6">
-      {/* Presets Section */}
+      {/* Presets */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -130,109 +134,133 @@ export function ExamTypeSelection() {
             <Button
               key={key}
               variant="outline"
-              onClick={() => applyPreset(key as keyof typeof PRESETS)}
+              onClick={() => applyPreset(key)}
               className="h-auto flex-col items-start rounded-xl border-border/80 bg-background/80 p-4 text-left hover:bg-accent/70"
             >
               <span className="font-semibold">{preset.name}</span>
-              <span className="text-xs text-muted-foreground mt-1">{preset.description}</span>
+              <span className="mt-1 text-xs text-muted-foreground">{preset.description}</span>
             </Button>
           ))}
         </CardContent>
       </Card>
 
-      {/* Question Types Section */}
+      {/* Question Types */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold">Question Types</h3>
+          <h3 className="text-lg font-semibold">Allowed Question Types</h3>
           <Button variant="ghost" size="sm" onClick={resetQuestionTypes} className="gap-2">
             <RotateCcw className="h-4 w-4" />
             Reset
           </Button>
         </div>
+        <p className="text-sm text-muted-foreground">
+          Select which types to include. The AI will pick the best fit for each concept.
+        </p>
 
-        {/* Question Type Inputs */}
         <div className="space-y-3">
           {(Object.keys(QUESTION_TYPES) as QuestionType[]).map(type => {
-            const config = QUESTION_TYPES[type]
+            const cfg = QUESTION_TYPES[type]
+            const enabled = questionTypes[type]
+            const iconColor = ICON_COLORS[cfg.icon] ?? 'bg-primary/15 text-primary'
+
             return (
-              <QuestionTypeInput
+              <label
                 key={type}
-                label={config.label}
-                description={config.description}
-                icon={config.icon}
-                value={questionTypes[type]}
-                onChange={value => setQuestionTypeQuantity(type, value)}
-                min={EXAM_CONFIG_RULES.MIN_ITEMS_PER_TYPE}
-                max={EXAM_CONFIG_RULES.MAX_ITEMS_PER_TYPE}
-              />
+                className={`flex cursor-pointer items-start gap-4 rounded-xl border p-4 transition-all ${
+                  enabled
+                    ? 'border-primary/40 bg-primary/5 shadow-sm'
+                    : 'border-border/70 bg-background hover:border-border'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={enabled}
+                  onChange={e => setQuestionTypeEnabled(type, e.target.checked)}
+                  className="mt-0.5 h-4 w-4 accent-primary"
+                />
+                <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded ${iconColor}`}>
+                  <span className="text-sm font-bold">
+                    {type === 'multipleChoice' ? 'MC' : type === 'trueFalse' ? 'TF' : type === 'fillInTheBlanks' ? 'FB' : 'SA'}
+                  </span>
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-foreground">{cfg.label}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{cfg.description}</p>
+                </div>
+              </label>
             )
           })}
         </div>
       </div>
 
-      {/* Total Counter & Validation */}
+      {/* Total Question Count */}
+      <Card>
+        <CardContent className="p-5">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h3 className="text-base font-semibold text-foreground">Total Questions</h3>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Cap: {EXAM_CONFIG_RULES.MIN_TOTAL_ITEMS}–{EXAM_CONFIG_RULES.MAX_TOTAL_ITEMS} questions
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDecrement}
+                disabled={totalQuestions <= EXAM_CONFIG_RULES.MIN_TOTAL_ITEMS}
+                className="h-8 w-8 p-0"
+                type="button"
+              >
+                <Minus className="h-4 w-4" />
+              </Button>
+              <Input
+                type="number"
+                value={inputValue}
+                onChange={handleCountChange}
+                onFocus={e => { setIsFocused(true); e.target.select() }}
+                onBlur={handleCountBlur}
+                min={EXAM_CONFIG_RULES.MIN_TOTAL_ITEMS}
+                max={EXAM_CONFIG_RULES.MAX_TOTAL_ITEMS}
+                className="w-20 h-8 text-center text-sm"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleIncrement}
+                disabled={totalQuestions >= EXAM_CONFIG_RULES.MAX_TOTAL_ITEMS}
+                className="h-8 w-8 p-0"
+                type="button"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Validation Banner */}
       <Card
         className={`border-2 ${
           isValid
             ? 'border-emerald-300 bg-emerald-50/80'
-            : totalQuestions > 0
+            : anyEnabled
               ? 'border-amber-300 bg-amber-50/80'
               : 'border-border/80'
         }`}
       >
-        <CardContent className="p-6">
-          {/* Total Count */}
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-2xl font-bold">Total Questions</h3>
-              <p className="text-sm text-muted-foreground">
-                {EXAM_CONFIG_RULES.MIN_TOTAL_ITEMS} - {EXAM_CONFIG_RULES.MAX_TOTAL_ITEMS} questions
-                required
-              </p>
-            </div>
-            <div
-              className={`text-5xl font-bold ${
-                isValid
-                  ? 'text-emerald-700'
-                  : totalQuestions > 0
-                    ? 'text-amber-700'
-                    : 'text-muted-foreground'
-              }`}
-            >
-              {totalQuestions}
-            </div>
-          </div>
-
-          {/* Progress Bar */}
-          <div className="mb-4">
-            <div className="h-2 overflow-hidden rounded-full bg-muted">
-              <div
-                className={`h-full transition-all duration-300 ${
-                  isValid
-                    ? 'bg-emerald-500'
-                    : totalQuestions > EXAM_CONFIG_RULES.MAX_TOTAL_ITEMS
-                      ? 'bg-destructive'
-                      : 'bg-amber-500'
-                }`}
-                style={{ width: `${getProgressPercentage()}%` }}
-              />
-            </div>
-          </div>
-
-          {/* Status Message */}
-          <div className="flex items-start gap-2">
-            {isValid ? (
-              <>
-                <CheckCircle2 className="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-700" />
-                <p className="text-sm font-medium text-emerald-900">{getStatusMessage()}</p>
-              </>
-            ) : (
-              <>
-                <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-700" />
-                <p className="text-sm font-medium text-amber-900">{getStatusMessage()}</p>
-              </>
-            )}
-          </div>
+        <CardContent className="flex items-start gap-2 p-4">
+          {isValid ? (
+            <>
+              <CheckCircle2 className="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-700" />
+              <p className="text-sm font-medium text-emerald-900">{getStatusMessage()}</p>
+            </>
+          ) : (
+            <>
+              <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-700" />
+              <p className="text-sm font-medium text-amber-900">{getStatusMessage()}</p>
+            </>
+          )}
         </CardContent>
       </Card>
     </div>

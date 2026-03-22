@@ -26,10 +26,10 @@ import type { TopicPlan, ConceptAssignment } from '../../shared/types/exam'
 
 export interface ExamGenerationConfig {
   questionTypes: {
-    multipleChoice?: number
-    trueFalse?: number
-    fillInTheBlanks?: number
-    shortAnswer?: number
+    multipleChoice: boolean
+    trueFalse: boolean
+    fillInTheBlanks: boolean
+    shortAnswer: boolean
   }
   difficultyDistribution: {
     veryEasy: number
@@ -73,7 +73,6 @@ export class TogetherProvider {
   private fallbackModel = 'llama-3.3-70b-versatile'
   private lastUsedProvider = 'Together AI'
   private lastActualQuestions = 0
-  private lastWarning: string | undefined
 
   constructor(togetherApiKey: string, groqApiKey?: string) {
     this.primaryClient = new OpenAI({
@@ -153,10 +152,6 @@ export class TogetherProvider {
     return this.lastActualQuestions
   }
 
-  getLastWarning(): string | undefined {
-    return this.lastWarning
-  }
-
   getModelInfo(): {
     primaryModel: string
     fallbackModel: string
@@ -183,9 +178,7 @@ export class TogetherProvider {
   async generateExam(
     config: ExamGenerationConfig,
     sourceText: string
-  ): Promise<{ content: string; warning?: string }> {
-    this.lastWarning = undefined
-
+  ): Promise<{ content: string }> {
     // Cap at 50 questions per research recommendation
     const cappedConfig: ExamGenerationConfig = {
       ...config,
@@ -208,7 +201,7 @@ export class TogetherProvider {
       const content = await this.callWithFallback(client =>
         this.generateFromPlan(client, plan, cappedConfig, sourceText)
       )
-      return { content, warning: this.lastWarning }
+      return { content }
     } catch (error: any) {
       throw new Error(`Pass 2 (question generation) failed: ${error.message}`)
     }
@@ -226,10 +219,16 @@ export class TogetherProvider {
     const model = client === this.primaryClient ? this.primaryModel : this.fallbackModel
     const totalQuestions = config.totalQuestions
 
-    // Build type distribution description
-    const typeLines = Object.entries(config.questionTypes)
-      .filter(([, count]) => count && count > 0)
-      .map(([type, count]) => `  - ${type}: ${count} question(s)`)
+    // Build allowed types description with guidance on when each fits best
+    const typeDescriptions: Record<string, string> = {
+      multipleChoice: 'for testing recall of facts, distinguishing between similar concepts',
+      trueFalse: 'for clear factual claims that are unambiguously true or false',
+      fillInTheBlanks: 'for key terms, definitions, or named processes',
+      shortAnswer: 'for causal relationships, mechanisms, or processes requiring explanation',
+    }
+    const allowedTypeLines = Object.entries(config.questionTypes)
+      .filter(([, enabled]) => enabled)
+      .map(([type]) => `  - ${type}: ${typeDescriptions[type]}`)
       .join('\n')
 
     // Build difficulty distribution using 3-level mapping
@@ -239,23 +238,43 @@ export class TogetherProvider {
       .map(([level, count]) => `  - ${level}: ${count} concept(s)`)
       .join('\n')
 
+    // Build conditional anti-laziness rules based on which types are enabled
+    const mcPriorityRule = config.questionTypes.multipleChoice
+      ? `- CRITICAL: Multiple Choice MUST be the primary question format. If a concept has comparable properties, causes, categories, or characteristics that can form plausible distractors, you MUST assign it as multipleChoice. Do NOT default to trueFalse or fillInTheBlanks just because they are easier to write.`
+      : ''
+
+    const enabledTypeCount = Object.values(config.questionTypes).filter(Boolean).length
+    const balanceRule =
+      enabledTypeCount >= 2
+        ? `- BALANCE: Enforce an even distribution among the allowed types. No single allowed type may represent more than 40% of all concepts unless it is the only type allowed.`
+        : ''
+
+    const tfVarianceRule = config.questionTypes.trueFalse
+      ? `- TRUE/FALSE VARIANCE: Exactly 50% of all trueFalse concepts must be statements that are FALSE. When writing a "false" T/F concept, you must rewrite the fact into a plausible but incorrect statement. Do NOT make every T/F statement True.`
+      : ''
+
+    const antiLazinessRules = [mcPriorityRule, balanceRule, tfVarianceRule]
+      .filter(Boolean)
+      .join('\n')
+
     const systemPrompt =
       'You are an expert educational assessment planner. Output valid JSON only. Do not include markdown or code fences.'
 
     const userPrompt = `Analyze the following source material and extract UP TO ${totalQuestions} unique concepts for a practice exam.
 
-QUESTION TYPE DISTRIBUTION (target, scale down proportionally if fewer concepts are available):
-${typeLines}
+ALLOWED QUESTION TYPES (assign whichever fits each concept best):
+${allowedTypeLines}
 
 DIFFICULTY DISTRIBUTION (3-level, scale down proportionally if fewer concepts are available):
 ${diffLines}
 
 REQUIREMENTS:
 - Each concept must be COMPLETELY DISTINCT — no overlap between concepts.
-- Assign each concept exactly one question type, one difficulty level, and one Bloom's taxonomy level.
+- Assign each concept exactly one question type from the ALLOWED list above (choose whichever type best suits that concept), one difficulty level, and one Bloom's taxonomy level.
 - For multipleChoice concepts, assign an "answerPosition" field (A, B, C, or D) cycling evenly to prevent answer bias.
 - Do NOT repeat any concept. Do NOT assign the same topic to multiple questions.
 - Concepts must be extracted ONLY from the source material provided. NEVER invent or add concepts from outside the source material to reach the target count. If the material only supports 15 or 30 distinct concepts, output only that many.
+${antiLazinessRules}
 
 OUTPUT FORMAT (JSON only):
 {
@@ -301,17 +320,6 @@ ${sourceText.slice(0, 80000)}`
     // reports a different number than it actually produced, and Pass 2 reads this field.
     validated.totalConcepts = validated.concepts.length
 
-    // If Pass 1 returned fewer concepts than requested, proportionally redistribute types
-    if (validated.concepts.length < totalQuestions) {
-      this.lastWarning = `Note: The uploaded file did not contain enough distinct information for the requested number of items. The exam has been scaled down to ${validated.concepts.length} questions while maintaining your requested format ratios.`
-      this.redistributeConceptTypes(validated.concepts, config)
-      const typeCounts = validated.concepts.reduce(
-        (acc, c) => ({ ...acc, [c.type]: (acc[c.type] ?? 0) + 1 }),
-        {} as Record<string, number>
-      )
-      console.log('[TogetherProvider] Pass 1 redistributed types:', typeCounts)
-    }
-
     // Overwrite ALL answerPosition fields with Fisher-Yates shuffled positions so
     // Pass 2 receives a balanced, unpredictable distribution regardless of what the AI assigned.
     const positions = this.generateMcqPositions(
@@ -342,39 +350,21 @@ ${sourceText.slice(0, 80000)}`
 
     const planJson = JSON.stringify(plan, null, 2)
 
-    // Compute explicit type counts from the plan so Pass 2 has an unambiguous target
-    const typeCounts = plan.concepts.reduce(
-      (acc, c) => ({ ...acc, [c.type]: (acc[c.type] ?? 0) + 1 }),
-      {} as Record<string, number>
-    )
-    const typeCountLines = [
-      ['multipleChoice', 'Multiple Choice'],
-      ['trueFalse', 'True or False'],
-      ['fillInTheBlanks', 'Fill in the Blanks'],
-      ['shortAnswer', 'Short Answer'],
-    ]
-      .filter(([key]) => (typeCounts[key] ?? 0) > 0)
-      .map(([key, label]) => `  - ${label}: ${typeCounts[key]} question(s)`)
-      .join('\n')
-
     const systemPrompt =
       "You are an expert exam question writer. Generate exactly one question per concept in the provided plan. You must follow the assigned 'type' and 'answerPosition' fields for every concept without exception."
 
     const userPrompt = `Generate exam questions from the topic plan below. Every rule below is MANDATORY.
 
-REQUIRED QUESTION COUNTS (derived from the plan — match these exactly):
-${typeCountLines}
-
 MANDATORY RULES:
 
 1. QUESTION COUNT: Write exactly ${plan.concepts.length} questions total — one per concept in the plan.
 
-2. QUESTION TYPE PER CONCEPT: Every concept in the plan has a "type" field. You MUST write that exact question type for that concept:
+2. QUESTION TYPE PER CONCEPT: Every concept in the plan has a "type" field. Write the question type specified in that field:
    - "multipleChoice"  → Write a 4-option multiple choice question (options A, B, C, D).
    - "trueFalse"       → Write a true/false statement.
    - "fillInTheBlanks" → Write a sentence with "___" marking the blank.
    - "shortAnswer"     → Write an open-ended question requiring a 2-4 sentence response.
-   Do NOT change a concept's type. Do NOT write more or fewer of any type than the counts above.
+   Do NOT change a concept's type.
 
 3. ANSWER PLACEMENT FOR MULTIPLE CHOICE: Every multiple choice concept in the plan has an "answerPosition" field set to "A", "B", "C", or "D". This field tells you exactly which option letter MUST contain the correct answer.
    - answerPosition "A" → Option A is correct; B, C, D are wrong distractors.
@@ -466,60 +456,6 @@ ${sourceText.slice(0, 80000)}`
       positions.push(...this.shuffleArray(base))
     }
     return positions.slice(0, count)
-  }
-
-  /**
-   * Proportionally redistribute concept types when Pass 1 returns fewer
-   * concepts than requested.  Ensures the user's requested ratios are
-   * preserved even when the source material limits coverage.
-   */
-  private redistributeConceptTypes(
-    concepts: ConceptAssignment[],
-    config: ExamGenerationConfig
-  ): void {
-    const actualCount = concepts.length
-    const totalRequested = Object.values(config.questionTypes).reduce(
-      (sum, v) => sum + (v ?? 0),
-      0
-    )
-    if (totalRequested === 0) return
-
-    const types = [
-      'multipleChoice',
-      'trueFalse',
-      'fillInTheBlanks',
-      'shortAnswer',
-    ] as const
-
-    // Only redistribute types that were originally requested
-    const activeTypes = types.filter(t => (config.questionTypes[t] ?? 0) > 0)
-
-    // Calculate proportional targets; last type absorbs rounding remainder
-    const targets: Partial<Record<(typeof types)[number], number>> = {}
-    let assigned = 0
-    for (let i = 0; i < activeTypes.length; i++) {
-      const type = activeTypes[i]
-      const requested = config.questionTypes[type] ?? 0
-      if (i < activeTypes.length - 1) {
-        const target = Math.round(actualCount * (requested / totalRequested))
-        targets[type] = target
-        assigned += target
-      } else {
-        targets[type] = actualCount - assigned
-      }
-    }
-
-    // Overwrite type field sequentially
-    let idx = 0
-    for (const type of activeTypes) {
-      const count = targets[type] ?? 0
-      for (let i = 0; i < count; i++) {
-        if (idx < concepts.length) {
-          concepts[idx].type = type
-          idx++
-        }
-      }
-    }
   }
 
   // ----------------------------------------------------------

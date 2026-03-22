@@ -26,7 +26,7 @@ export function ConfigurationSummary() {
   const uploadedFiles = useFileUploadStore(state => state.uploadedFiles)
   const questionTypes = useExamConfigStore(state => state.questionTypes)
   const difficultyDistribution = useExamConfigStore(state => state.difficultyDistribution)
-  const totalQuestions = useExamConfigStore(state => state.getTotalQuestions())
+  const totalQuestions = useExamConfigStore(state => state.totalQuestions)
 
   // Format file size
   const formatFileSize = (bytes: number): string => {
@@ -122,7 +122,7 @@ export function ConfigurationSummary() {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>Question Types</CardTitle>
-              <CardDescription>{totalQuestions} total questions</CardDescription>
+              <CardDescription>Up to {totalQuestions} questions — AI assigns best type per concept</CardDescription>
             </div>
             <Button
               variant="ghost"
@@ -137,17 +137,17 @@ export function ConfigurationSummary() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 gap-3">
-            {(Object.entries(questionTypes) as [QuestionType, number][])
-              .filter(([_, count]) => count > 0)
-              .map(([type, count]) => (
+            {(Object.entries(questionTypes) as [QuestionType, boolean][])
+              .filter(([_, enabled]) => enabled)
+              .map(([type]) => (
                 <div
                   key={type}
-                  className="flex items-center justify-between rounded-lg border border-border/70 bg-muted/40 p-3"
+                  className="flex items-center gap-2 rounded-lg border border-border/70 bg-muted/40 p-3"
                 >
+                  <CheckCircle className="h-4 w-4 text-emerald-700 flex-shrink-0" />
                   <span className="text-sm font-medium text-foreground">
                     {getQuestionTypeLabel(type)}
                   </span>
-                  <span className="text-sm font-semibold text-primary">{count}</span>
                 </div>
               ))}
           </div>
