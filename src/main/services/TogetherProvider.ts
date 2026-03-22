@@ -73,6 +73,7 @@ export class TogetherProvider {
   private fallbackModel = 'llama-3.3-70b-versatile'
   private lastUsedProvider = 'Together AI'
   private lastActualQuestions = 0
+  private lastWarning: string | undefined
 
   constructor(togetherApiKey: string, groqApiKey?: string) {
     this.primaryClient = new OpenAI({
@@ -152,6 +153,10 @@ export class TogetherProvider {
     return this.lastActualQuestions
   }
 
+  getLastWarning(): string | undefined {
+    return this.lastWarning
+  }
+
   getModelInfo(): {
     primaryModel: string
     fallbackModel: string
@@ -175,7 +180,12 @@ export class TogetherProvider {
    * 1. extractTopicPlan  — JSON mode, temperature 0.3 (deterministic planning)
    * 2. generateFromPlan  — text mode, temperature 0.5 (creative question writing)
    */
-  async generateExam(config: ExamGenerationConfig, sourceText: string): Promise<string> {
+  async generateExam(
+    config: ExamGenerationConfig,
+    sourceText: string
+  ): Promise<{ content: string; warning?: string }> {
+    this.lastWarning = undefined
+
     // Cap at 50 questions per research recommendation
     const cappedConfig: ExamGenerationConfig = {
       ...config,
@@ -195,10 +205,10 @@ export class TogetherProvider {
 
     // --- Pass 2: Question Generation from Plan ---
     try {
-      const examContent = await this.callWithFallback(client =>
+      const content = await this.callWithFallback(client =>
         this.generateFromPlan(client, plan, cappedConfig, sourceText)
       )
-      return examContent
+      return { content, warning: this.lastWarning }
     } catch (error: any) {
       throw new Error(`Pass 2 (question generation) failed: ${error.message}`)
     }
@@ -228,10 +238,6 @@ export class TogetherProvider {
       .filter(([, count]) => count > 0)
       .map(([level, count]) => `  - ${level}: ${count} concept(s)`)
       .join('\n')
-
-    // Pre-assign answer positions for MCQ concepts to prevent answer bias
-    const answerCycle: Array<'A' | 'B' | 'C' | 'D'> = ['A', 'B', 'C', 'D']
-    let mcqIndex = 0
 
     const systemPrompt =
       'You are an expert educational assessment planner. Output valid JSON only. Do not include markdown or code fences.'
@@ -289,13 +295,21 @@ ${sourceText.slice(0, 80000)}`
       throw new Error(`Pass 1 returned invalid JSON: ${rawContent.slice(0, 200)}`)
     }
 
-    // If model returned concepts without answerPosition for MCQ, assign them now
     const validated = TopicPlanSchema.parse(parsed) as TopicPlan
+
+    // If Pass 1 returned fewer concepts than requested, proportionally redistribute types
+    if (validated.concepts.length < totalQuestions) {
+      this.lastWarning = `Note: The uploaded file did not contain enough distinct information for the requested number of items. The exam has been scaled down to ${validated.concepts.length} questions while maintaining your requested format ratios.`
+      this.redistributeConceptTypes(validated.concepts, config)
+    }
+
+    // Assign shuffled answer positions for all MCQ concepts (Fisher-Yates chunks)
+    const mcqConcepts = validated.concepts.filter(c => c.type === 'multipleChoice')
+    const positions = this.generateMcqPositions(mcqConcepts.length)
+    let posIdx = 0
     validated.concepts = validated.concepts.map(concept => {
-      if (concept.type === 'multipleChoice' && !concept.answerPosition) {
-        const position = answerCycle[mcqIndex % 4]
-        mcqIndex++
-        return { ...concept, answerPosition: position } as ConceptAssignment
+      if (concept.type === 'multipleChoice') {
+        return { ...concept, answerPosition: positions[posIdx++] } as ConceptAssignment
       }
       return concept
     })
@@ -380,6 +394,89 @@ ${sourceText.slice(0, 80000)}`
     }
 
     return content
+  }
+
+  // ----------------------------------------------------------
+  // Answer position helpers (Fisher-Yates)
+  // ----------------------------------------------------------
+
+  /**
+   * Fisher-Yates shuffle — returns a new shuffled copy of the array.
+   */
+  private shuffleArray<T>(arr: T[]): T[] {
+    const shuffled = [...arr]
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+    }
+    return shuffled
+  }
+
+  /**
+   * Generate `count` answer positions using Fisher-Yates shuffled chunks of 4.
+   * Guarantees an even A/B/C/D distribution while being unpredictable.
+   */
+  private generateMcqPositions(count: number): Array<'A' | 'B' | 'C' | 'D'> {
+    const base: Array<'A' | 'B' | 'C' | 'D'> = ['A', 'B', 'C', 'D']
+    const positions: Array<'A' | 'B' | 'C' | 'D'> = []
+    while (positions.length < count) {
+      positions.push(...this.shuffleArray(base))
+    }
+    return positions.slice(0, count)
+  }
+
+  /**
+   * Proportionally redistribute concept types when Pass 1 returns fewer
+   * concepts than requested.  Ensures the user's requested ratios are
+   * preserved even when the source material limits coverage.
+   */
+  private redistributeConceptTypes(
+    concepts: ConceptAssignment[],
+    config: ExamGenerationConfig
+  ): void {
+    const actualCount = concepts.length
+    const totalRequested = Object.values(config.questionTypes).reduce(
+      (sum, v) => sum + (v ?? 0),
+      0
+    )
+    if (totalRequested === 0) return
+
+    const types = [
+      'multipleChoice',
+      'trueFalse',
+      'fillInTheBlanks',
+      'shortAnswer',
+    ] as const
+
+    // Only redistribute types that were originally requested
+    const activeTypes = types.filter(t => (config.questionTypes[t] ?? 0) > 0)
+
+    // Calculate proportional targets; last type absorbs rounding remainder
+    const targets: Partial<Record<(typeof types)[number], number>> = {}
+    let assigned = 0
+    for (let i = 0; i < activeTypes.length; i++) {
+      const type = activeTypes[i]
+      const requested = config.questionTypes[type] ?? 0
+      if (i < activeTypes.length - 1) {
+        const target = Math.round(actualCount * (requested / totalRequested))
+        targets[type] = target
+        assigned += target
+      } else {
+        targets[type] = actualCount - assigned
+      }
+    }
+
+    // Overwrite type field sequentially
+    let idx = 0
+    for (const type of activeTypes) {
+      const count = targets[type] ?? 0
+      for (let i = 0; i < count; i++) {
+        if (idx < concepts.length) {
+          concepts[idx].type = type
+          idx++
+        }
+      }
+    }
   }
 
   // ----------------------------------------------------------

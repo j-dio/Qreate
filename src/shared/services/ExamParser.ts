@@ -123,12 +123,12 @@ export class ExamParser {
         '[ExamParser] Alternative format not found, trying to extract from Multiple Choice onwards...'
       )
       examContentMatch = examText.match(
-        /(?:Multiple Choice|True\/False|Fill in|Short Answer|Essay|Matching|Identification)[:\s]*([\s\S]*?)(?:Answer Key[:\s]|\[PAGE BREAK\]|$)/i
+        /(?:Multiple Choice|True\/False|Fill in|Short Answer|Essay|Matching|Identification)[:\s]*([\s\S]*?)(?:----+\s*Answer Key\s*----+|Answer Key[:\s]|\[PAGE BREAK\]|$)/i
       )
       if (examContentMatch) {
         // Prepend the question type header we found
         const fullMatch = examText.match(
-          /((?:Multiple Choice|True\/False|Fill in|Short Answer|Essay|Matching|Identification)[:\s]*[\s\S]*?)(?:Answer Key[:\s]|\[PAGE BREAK\]|$)/i
+          /((?:Multiple Choice|True\/False|Fill in|Short Answer|Essay|Matching|Identification)[:\s]*[\s\S]*?)(?:----+\s*Answer Key\s*----+|Answer Key[:\s]|\[PAGE BREAK\]|$)/i
         )
         if (fullMatch) {
           examContentMatch[1] = fullMatch[1]
