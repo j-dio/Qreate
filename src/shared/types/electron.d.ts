@@ -19,5 +19,7 @@ declare global {
   }
 }
 
+declare module '*.css'
+
 // This export makes it a module (required for declaration merging)
 export {}
