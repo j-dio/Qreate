@@ -569,11 +569,11 @@ async function registerIpcHandlers(): Promise<void> {
   /**
    * AI Provider: Generate exam
    *
-   * Backend-managed exam generation using configurable AI providers (Gemini, Groq).
-   * No API key required from user - handled server-side.
+   * Two-pass PFQS generation via Together AI (Qwen3-235B) with Groq fallback.
+   * API keys are loaded from .env.local in the main process — not exposed to renderer.
    *
    * Features:
-   * - Multi-provider support (Gemini, Groq) with automatic fallback
+   * - Two-pass generation: Pass 1 topic plan (JSON), Pass 2 questions from plan
    * - Per-user quotas (10/week, 3/day burst, 40/month)
    * - Global rate limiting and usage tracking
    * - Retry logic with exponential backoff
