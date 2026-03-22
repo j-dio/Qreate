@@ -127,7 +127,7 @@ export function FileUploadPage() {
         <div className="step-kicker">
           <span>Phase 2: Exam Configuration</span>
           <span>•</span>
-          <span>Step 1 of 4</span>
+          <span>Step 1 of 3</span>
         </div>
         <h2 className="text-3xl font-extrabold tracking-tight">Upload Study Materials</h2>
         <p className="text-muted-foreground mt-1">

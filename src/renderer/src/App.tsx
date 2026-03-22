@@ -10,8 +10,7 @@
  * - /settings - Settings page (protected)
  * - /create-exam - File upload (protected)
  * - /create-exam/types - Exam type selection (protected)
- * - /create-exam/difficulty - Difficulty distribution (protected)
- * - /create-exam/review - Review & confirmation (protected)
+ *- /create-exam/review - Review & confirmation (protected)
  * - /create-exam/generate - Exam generation progress (protected)
  * - /create-exam/success - Exam success & Google Drive export (protected)
  *
@@ -29,7 +28,6 @@ import { SettingsPage } from './pages/SettingsPage'
 import { MyExamsPage } from './pages/MyExamsPage'
 import { FileUploadPage } from './pages/FileUploadPage'
 import { ExamTypeSelectionPage } from './pages/ExamTypeSelectionPage'
-import { DifficultyDistributionPage } from './pages/DifficultyDistributionPage'
 import { ReviewConfirmationPage } from './pages/ReviewConfirmationPage'
 import { ExamGenerationProgressPage } from './pages/ExamGenerationProgressPage'
 import { ExamSuccessPage } from './pages/ExamSuccessPage'
@@ -185,14 +183,6 @@ function App() {
           element={
             <ProtectedRoute>
               <ExamTypeSelectionPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/create-exam/difficulty"
-          element={
-            <ProtectedRoute>
-              <DifficultyDistributionPage />
             </ProtectedRoute>
           }
         />

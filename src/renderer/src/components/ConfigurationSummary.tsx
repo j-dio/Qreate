@@ -17,7 +17,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { Button } from './ui/Button'
 import { useFileUploadStore } from '../store/useFileUploadStore'
 import { useExamConfigStore } from '../store/useExamConfigStore'
-import type { QuestionType, DifficultyLevel } from '../store/useExamConfigStore'
+import type { QuestionType } from '../store/useExamConfigStore'
 
 export function ConfigurationSummary() {
   const navigate = useNavigate()
@@ -25,7 +25,6 @@ export function ConfigurationSummary() {
   // Get state from stores
   const uploadedFiles = useFileUploadStore(state => state.uploadedFiles)
   const questionTypes = useExamConfigStore(state => state.questionTypes)
-  const difficultyDistribution = useExamConfigStore(state => state.difficultyDistribution)
   const totalQuestions = useExamConfigStore(state => state.totalQuestions)
 
   // Format file size
@@ -44,29 +43,6 @@ export function ConfigurationSummary() {
       shortAnswer: 'Short Answer',
     }
     return labels[type]
-  }
-
-  const getDifficultyLabel = (level: DifficultyLevel): string => {
-    const labels: Record<DifficultyLevel, string> = {
-      veryEasy: 'Very Easy',
-      easy: 'Easy',
-      moderate: 'Moderate',
-      hard: 'Hard',
-      veryHard: 'Very Hard',
-    }
-    return labels[level]
-  }
-
-  // Get difficulty color
-  const getDifficultyColor = (level: DifficultyLevel): string => {
-    const colors: Record<DifficultyLevel, string> = {
-      veryEasy: 'bg-emerald-500',
-      easy: 'bg-cyan-500',
-      moderate: 'bg-amber-500',
-      hard: 'bg-orange-500',
-      veryHard: 'bg-rose-500',
-    }
-    return colors[level]
   }
 
   return (
@@ -154,53 +130,6 @@ export function ConfigurationSummary() {
         </CardContent>
       </Card>
 
-      {/* Difficulty Distribution Section */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Difficulty Distribution</CardTitle>
-              <CardDescription>Distribution across difficulty levels</CardDescription>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate('/create-exam/difficulty')}
-              className="flex items-center gap-2"
-            >
-              <PencilLine className="h-4 w-4" />
-              Edit
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {(Object.entries(difficultyDistribution) as [DifficultyLevel, number][])
-              .filter(([_, count]) => count > 0)
-              .map(([level, count]) => {
-                const percentage = totalQuestions > 0 ? (count / totalQuestions) * 100 : 0
-                return (
-                  <div key={level} className="space-y-1">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="font-medium text-foreground">
-                        {getDifficultyLabel(level)}
-                      </span>
-                      <span className="text-muted-foreground">
-                        {count} ({percentage.toFixed(0)}%)
-                      </span>
-                    </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-muted">
-                      <div
-                        className={`h-full ${getDifficultyColor(level)} transition-all duration-300`}
-                        style={{ width: `${percentage}%` }}
-                      />
-                    </div>
-                  </div>
-                )
-              })}
-          </div>
-        </CardContent>
-      </Card>
     </div>
   )
 }

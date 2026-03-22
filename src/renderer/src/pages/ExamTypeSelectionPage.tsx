@@ -56,8 +56,8 @@ export function ExamTypeSelectionPage() {
   const handleNext = () => {
     if (!canProceed) return
 
-    // Navigate to difficulty distribution page
-    navigate('/create-exam/difficulty')
+    // Navigate to review page
+    navigate('/create-exam/review')
   }
 
   /**
@@ -77,7 +77,7 @@ export function ExamTypeSelectionPage() {
         <div className="step-kicker">
           <span>Phase 2: Exam Configuration</span>
           <span>•</span>
-          <span>Step 2 of 4</span>
+          <span>Step 2 of 3</span>
         </div>
         <h2 className="text-3xl font-extrabold tracking-tight">Configure Question Types</h2>
         <p className="text-muted-foreground mt-1">
@@ -124,10 +124,10 @@ export function ExamTypeSelectionPage() {
           title={
             !canProceed
               ? 'Select at least one type and set 10–50 questions to continue'
-              : 'Proceed to difficulty distribution'
+              : 'Proceed to review'
           }
         >
-          Next: Set Difficulty
+          Next: Review
           <ArrowRight className="h-4 w-4" />
         </Button>
       </div>
