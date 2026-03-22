@@ -17,7 +17,7 @@
 
 import { useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
-import { ArrowLeft, Bot, AlertCircle, CheckCircle, Sparkles } from 'lucide-react'
+import { ArrowLeft, Bot, AlertCircle, CheckCircle, Sparkles, Loader2 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { ConfigurationSummary } from '../components/ConfigurationSummary'
@@ -26,6 +26,7 @@ import { useFileUploadStore } from '../store/useFileUploadStore'
 
 export function ReviewConfirmationPage() {
   const navigate = useNavigate()
+  const [isCheckingAi, setIsCheckingAi] = useState(true)
   const [aiStatus, setAiStatus] = useState<{
     connected: boolean
     message: string
@@ -35,7 +36,6 @@ export function ReviewConfirmationPage() {
     connected: false,
     message: 'Checking AI connection...',
   })
-
   // Get state from stores
   const uploadedFiles = useFileUploadStore(state => state.uploadedFiles)
   const totalQuestions = useExamConfigStore(state => state.getTotalQuestions())
@@ -44,6 +44,7 @@ export function ReviewConfirmationPage() {
   // Check AI provider connection
   useEffect(() => {
     const checkAiConnection = async () => {
+      setIsCheckingAi(true)
       try {
         // Test AI provider connection
         const connectionResult = await window.electron.ai.testConnection()
@@ -81,6 +82,8 @@ export function ReviewConfirmationPage() {
           connected: false,
           message: 'Failed to connect to AI backend',
         })
+      } finally {
+        setIsCheckingAi(false)
       }
     }
 
@@ -182,18 +185,26 @@ export function ReviewConfirmationPage() {
           {/* AI Provider Info */}
           <div
             className={`flex items-center justify-between rounded-lg border p-4 ${
-              aiStatus.connected
-                ? 'border-emerald-200 bg-emerald-50'
-                : 'border-amber-200 bg-amber-50'
+              isCheckingAi
+                ? 'border-sky-200 bg-sky-50'
+                : aiStatus.connected
+                  ? 'border-emerald-200 bg-emerald-50'
+                  : 'border-amber-200 bg-amber-50'
             }`}
           >
             <div className="flex items-center gap-3">
               <div
                 className={`rounded-lg p-2 ${
-                  aiStatus.connected ? 'bg-emerald-100' : 'bg-amber-100'
+                  isCheckingAi
+                    ? 'bg-sky-100'
+                    : aiStatus.connected
+                      ? 'bg-emerald-100'
+                      : 'bg-amber-100'
                 }`}
               >
-                {aiStatus.connected ? (
+                {isCheckingAi ? (
+                  <Loader2 className="h-5 w-5 animate-spin text-sky-700" />
+                ) : aiStatus.connected ? (
                   <CheckCircle className="h-5 w-5 text-emerald-700" />
                 ) : (
                   <Bot className="h-5 w-5 text-amber-700" />
@@ -208,12 +219,14 @@ export function ReviewConfirmationPage() {
             </div>
             <div
               className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                aiStatus.connected
-                  ? 'bg-emerald-100 text-emerald-700'
-                  : 'bg-amber-100 text-amber-700'
+                isCheckingAi
+                  ? 'bg-sky-100 text-sky-700'
+                  : aiStatus.connected
+                    ? 'bg-emerald-100 text-emerald-700'
+                    : 'bg-amber-100 text-amber-700'
               }`}
             >
-              {aiStatus.connected ? 'Connected' : 'Disconnected'}
+              {isCheckingAi ? 'Checking...' : aiStatus.connected ? 'Connected' : 'Disconnected'}
             </div>
           </div>
 
@@ -230,7 +243,7 @@ export function ReviewConfirmationPage() {
           </div>
 
           {/* Warning if AI provider not connected */}
-          {!aiStatus.connected && (
+          {!isCheckingAi && !aiStatus.connected && (
             <div className="status-banner status-banner-error">
               <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-red-600" />
               <div className="text-sm">
@@ -259,7 +272,7 @@ export function ReviewConfirmationPage() {
 
         <Button
           onClick={handleGenerate}
-          disabled={!aiStatus.connected}
+          disabled={isCheckingAi || !aiStatus.connected}
           className="flex items-center gap-2"
         >
           <Sparkles className="h-4 w-4" />
