@@ -1,9 +1,9 @@
 {
   "name": "qreate",
-  "version": "0.1.0",
-  "description": "An automated test creator desktop app",
+  "version": "1.0.0",
+  "description": "AI-powered desktop app that transforms study materials into realistic practice exams",
   "main": "dist/main/index.js",
-  "author": "",
+  "author": "John Dio Lumacang",
   "license": "ISC",
   "scripts": {
     "dev": "electron-vite dev",
