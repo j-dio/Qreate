@@ -4,7 +4,7 @@
   "description": "AI-powered desktop app that transforms study materials into realistic practice exams",
   "main": "dist/main/index.js",
   "author": "John Dio Lumacang",
-  "license": "ISC",
+  "license": "MIT",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
