@@ -74,7 +74,7 @@ function getStatusBadge(file: UploadedFile) {
   switch (file.status) {
     case 'pending':
       return (
-        <div className="flex items-center gap-2 text-gray-600">
+        <div className="flex items-center gap-2 text-muted-foreground">
           <Clock className="h-4 w-4" />
           <span className="text-xs font-medium">Pending</span>
         </div>
@@ -82,7 +82,7 @@ function getStatusBadge(file: UploadedFile) {
 
     case 'validating':
       return (
-        <div className="flex items-center gap-2 text-blue-600">
+        <div className="flex items-center gap-2 text-primary">
           <Loader2 className="h-4 w-4 animate-spin" />
           <span className="text-xs font-medium">Validating...</span>
         </div>
@@ -90,7 +90,7 @@ function getStatusBadge(file: UploadedFile) {
 
     case 'valid':
       return (
-        <div className="flex items-center gap-2 text-green-600">
+        <div className="flex items-center gap-2 text-emerald-700">
           <CheckCircle2 className="h-4 w-4" />
           <span className="text-xs font-medium">Valid</span>
         </div>
@@ -106,7 +106,7 @@ function getStatusBadge(file: UploadedFile) {
 
     case 'extracting':
       return (
-        <div className="flex items-center gap-2 text-blue-600">
+        <div className="flex items-center gap-2 text-primary">
           <Loader2 className="h-4 w-4 animate-spin" />
           <span className="text-xs font-medium">Extracting text...</span>
         </div>
@@ -114,7 +114,7 @@ function getStatusBadge(file: UploadedFile) {
 
     case 'ready':
       return (
-        <div className="flex items-center gap-2 text-green-600">
+        <div className="flex items-center gap-2 text-emerald-700">
           <CheckCircle2 className="h-4 w-4" />
           <span className="text-xs font-medium">Ready</span>
         </div>
@@ -136,7 +136,9 @@ function FileItem({ file }: { file: UploadedFile }) {
   return (
     <div
       className={`flex items-center justify-between p-4 rounded-lg border transition-colors ${
-        file.status === 'invalid' ? 'border-red-200 bg-red-50' : 'border-gray-200 hover:bg-gray-50'
+        file.status === 'invalid'
+          ? 'border-red-200 bg-red-50/80'
+          : 'border-border/80 bg-background/80 hover:bg-muted/40'
       }`}
     >
       {/* File Info */}
@@ -147,8 +149,8 @@ function FileItem({ file }: { file: UploadedFile }) {
             file.status === 'invalid'
               ? 'bg-red-100 text-red-600'
               : file.status === 'valid' || file.status === 'ready'
-                ? 'bg-green-100 text-green-600'
-                : 'bg-gray-100 text-gray-600'
+                ? 'bg-emerald-100 text-emerald-700'
+                : 'bg-muted text-muted-foreground'
           }`}
         >
           {getFileIcon(file)}
@@ -181,7 +183,7 @@ function FileItem({ file }: { file: UploadedFile }) {
           variant="ghost"
           size="sm"
           onClick={() => removeFile(file.id)}
-          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+          className="text-red-600 hover:bg-red-50 hover:text-red-700"
           title="Remove file"
         >
           <X className="h-4 w-4" />

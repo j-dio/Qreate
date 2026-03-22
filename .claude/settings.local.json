@@ -8,7 +8,11 @@
       "mcp__filesystem__directory_tree",
       "mcp__filesystem__read_multiple_files",
       "mcp__filesystem__list_directory",
-      "Bash(npm run typecheck:*)"
+      "Bash(npm run typecheck:*)",
+      "Skill(gsd:research-phase)",
+      "WebSearch",
+      "Skill(gsd:add-phase)",
+      "Bash(node ~/.claude/get-shit-done/bin/gsd-tools.cjs commit \"fix\\(01-provider-migration\\): revise plans based on checker feedback\" --files \".planning/phases/01-provider-migration-to-together-ai-qwen3-235b-with-two-pass-generation-dead-code-removal-and-50-question-simplification/01-02-PLAN.md\" \".planning/phases/01-provider-migration-to-together-ai-qwen3-235b-with-two-pass-generation-dead-code-removal-and-50-question-simplification/01-03-PLAN.md\")"
     ]
   },
   "enableAllProjectMcpServers": true,

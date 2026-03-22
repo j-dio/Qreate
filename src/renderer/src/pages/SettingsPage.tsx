@@ -8,7 +8,7 @@
  */
 
 import { useNavigate } from 'react-router-dom'
-import { CheckCircle2, Zap, Sparkles, TrendingUp, Calendar } from 'lucide-react'
+import { CheckCircle2, Gauge, Sparkles, ChartNoAxesColumn, CalendarClock } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
 import { useAppStore } from '../store/useAppStore'
@@ -56,15 +56,15 @@ export function SettingsPage() {
     <div className="space-y-8">
       {/* Page Header */}
       <div>
-        <h2 className="text-3xl font-bold tracking-tight">Settings</h2>
+        <h2 className="text-3xl font-extrabold tracking-tight">Settings</h2>
         <p className="text-muted-foreground">Manage your account and view usage statistics</p>
       </div>
 
       {/* AI Provider Info */}
-      <Card className="border-green-200 bg-green-50">
+      <Card className="border-emerald-200 bg-emerald-50/80">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-green-600" />
+            <Sparkles className="h-5 w-5 text-emerald-700" />
             AI Exam Generation (Powered by Groq)
           </CardTitle>
           <CardDescription>
@@ -72,7 +72,7 @@ export function SettingsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center gap-2 text-green-700">
+          <div className="flex items-center gap-2 text-emerald-800">
             <CheckCircle2 className="h-5 w-5" />
             <span className="font-semibold">Backend AI Service Active</span>
           </div>
@@ -88,11 +88,11 @@ export function SettingsPage() {
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Reliability:</span>
-              <span className="font-medium text-green-600">100% Success Rate</span>
+              <span className="font-medium text-emerald-700">100% Success Rate</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Cost:</span>
-              <span className="font-medium text-green-600">Completely FREE</span>
+              <span className="font-medium text-emerald-700">Completely FREE</span>
             </div>
           </div>
 
@@ -107,7 +107,7 @@ export function SettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5" />
+              <ChartNoAxesColumn className="h-5 w-5" />
               Usage Statistics
             </CardTitle>
             <CardDescription>Track your exam generation usage and quota limits</CardDescription>
@@ -117,7 +117,7 @@ export function SettingsPage() {
             <div>
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <Zap className="h-4 w-4 text-blue-500" />
+                  <Gauge className="h-4 w-4 text-primary" />
                   <span className="font-medium">Today's Usage</span>
                 </div>
                 <span className="text-sm text-muted-foreground">
@@ -126,9 +126,9 @@ export function SettingsPage() {
               </div>
 
               {/* Progress bar */}
-              <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
+              <div className="mb-2 h-2 w-full rounded-full bg-muted">
                 <div
-                  className="bg-blue-500 h-2 rounded-full transition-all"
+                  className="h-2 rounded-full bg-primary transition-all"
                   style={{
                     width: `${(usageStatus.usage.examsToday / usageStatus.limits.examsPerDay) * 100}%`,
                   }}
@@ -139,7 +139,7 @@ export function SettingsPage() {
                 <span className="text-muted-foreground">
                   {usageStatus.usage.examsToday} / {usageStatus.limits.examsPerDay} exams used
                 </span>
-                <span className="font-medium text-blue-600">
+                <span className="font-medium text-primary">
                   {usageStatus.limits.examsPerDay - usageStatus.usage.examsToday} remaining
                 </span>
               </div>
@@ -149,16 +149,16 @@ export function SettingsPage() {
             <div>
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-purple-500" />
+                  <CalendarClock className="h-4 w-4 text-cyan-700" />
                   <span className="font-medium">This Month</span>
                 </div>
                 <span className="text-sm text-muted-foreground">Resets on the 1st</span>
               </div>
 
               {/* Progress bar */}
-              <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
+              <div className="mb-2 h-2 w-full rounded-full bg-muted">
                 <div
-                  className="bg-purple-500 h-2 rounded-full transition-all"
+                  className="h-2 rounded-full bg-cyan-600 transition-all"
                   style={{
                     width: `${(usageStatus.usage.examsThisMonth / usageStatus.limits.examsPerMonth) * 100}%`,
                   }}
@@ -169,7 +169,7 @@ export function SettingsPage() {
                 <span className="text-muted-foreground">
                   {usageStatus.usage.examsThisMonth} / {usageStatus.limits.examsPerMonth} exams used
                 </span>
-                <span className="font-medium text-purple-600">
+                <span className="font-medium text-cyan-700">
                   {usageStatus.limits.examsPerMonth - usageStatus.usage.examsThisMonth} remaining
                 </span>
               </div>

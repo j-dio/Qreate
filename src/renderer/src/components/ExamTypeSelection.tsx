@@ -121,7 +121,7 @@ export function ExamTypeSelection() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-blue-600" />
+            <Sparkles className="h-5 w-5 text-primary" />
             Quick Presets
           </CardTitle>
         </CardHeader>
@@ -131,7 +131,7 @@ export function ExamTypeSelection() {
               key={key}
               variant="outline"
               onClick={() => applyPreset(key as keyof typeof PRESETS)}
-              className="h-auto flex-col items-start p-4 text-left"
+              className="h-auto flex-col items-start rounded-xl border-border/80 bg-background/80 p-4 text-left hover:bg-accent/70"
             >
               <span className="font-semibold">{preset.name}</span>
               <span className="text-xs text-muted-foreground mt-1">{preset.description}</span>
@@ -174,10 +174,10 @@ export function ExamTypeSelection() {
       <Card
         className={`border-2 ${
           isValid
-            ? 'border-green-500 bg-green-50'
+            ? 'border-emerald-300 bg-emerald-50/80'
             : totalQuestions > 0
-              ? 'border-orange-500 bg-orange-50'
-              : 'border-gray-300'
+              ? 'border-amber-300 bg-amber-50/80'
+              : 'border-border/80'
         }`}
       >
         <CardContent className="p-6">
@@ -193,10 +193,10 @@ export function ExamTypeSelection() {
             <div
               className={`text-5xl font-bold ${
                 isValid
-                  ? 'text-green-600'
+                  ? 'text-emerald-700'
                   : totalQuestions > 0
-                    ? 'text-orange-600'
-                    : 'text-gray-400'
+                    ? 'text-amber-700'
+                    : 'text-muted-foreground'
               }`}
             >
               {totalQuestions}
@@ -205,14 +205,14 @@ export function ExamTypeSelection() {
 
           {/* Progress Bar */}
           <div className="mb-4">
-            <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+            <div className="h-2 overflow-hidden rounded-full bg-muted">
               <div
                 className={`h-full transition-all duration-300 ${
                   isValid
-                    ? 'bg-green-500'
+                    ? 'bg-emerald-500'
                     : totalQuestions > EXAM_CONFIG_RULES.MAX_TOTAL_ITEMS
-                      ? 'bg-red-500'
-                      : 'bg-orange-500'
+                      ? 'bg-destructive'
+                      : 'bg-amber-500'
                 }`}
                 style={{ width: `${getProgressPercentage()}%` }}
               />
@@ -223,13 +223,13 @@ export function ExamTypeSelection() {
           <div className="flex items-start gap-2">
             {isValid ? (
               <>
-                <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
-                <p className="text-sm font-medium text-green-900">{getStatusMessage()}</p>
+                <CheckCircle2 className="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-700" />
+                <p className="text-sm font-medium text-emerald-900">{getStatusMessage()}</p>
               </>
             ) : (
               <>
-                <AlertCircle className="h-5 w-5 text-orange-600 flex-shrink-0 mt-0.5" />
-                <p className="text-sm font-medium text-orange-900">{getStatusMessage()}</p>
+                <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-700" />
+                <p className="text-sm font-medium text-amber-900">{getStatusMessage()}</p>
               </>
             )}
           </div>

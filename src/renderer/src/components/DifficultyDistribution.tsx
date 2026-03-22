@@ -41,11 +41,11 @@ export function DifficultyDistribution() {
     label: string
     color: string
   }> = [
-    { key: 'veryEasy', label: 'Very Easy', color: 'bg-green-500' },
-    { key: 'easy', label: 'Easy', color: 'bg-blue-500' },
-    { key: 'moderate', label: 'Moderate', color: 'bg-yellow-500' },
+    { key: 'veryEasy', label: 'Very Easy', color: 'bg-emerald-500' },
+    { key: 'easy', label: 'Easy', color: 'bg-cyan-500' },
+    { key: 'moderate', label: 'Moderate', color: 'bg-amber-500' },
     { key: 'hard', label: 'Hard', color: 'bg-orange-500' },
-    { key: 'veryHard', label: 'Very Hard', color: 'bg-red-500' },
+    { key: 'veryHard', label: 'Very Hard', color: 'bg-rose-500' },
   ]
 
   const handleAutoDistribute = useCallback(() => {
@@ -57,15 +57,15 @@ export function DifficultyDistribution() {
       {/* Header with Auto-Distribute */}
       <div className="flex items-start justify-between">
         <div>
-          <h3 className="text-lg font-semibold text-gray-900">Difficulty Distribution</h3>
-          <p className="text-sm text-gray-600 mt-1">
+          <h3 className="text-lg font-semibold text-foreground">Difficulty Distribution</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
             Distribute {totalQuestions} questions across difficulty levels
           </p>
         </div>
         <button
           type="button"
           onClick={handleAutoDistribute}
-          className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+          className="rounded-lg border border-border/80 bg-muted/50 px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
         >
           Auto-Distribute
         </button>
@@ -74,10 +74,10 @@ export function DifficultyDistribution() {
       {/* Progress Bar */}
       <div className="space-y-2">
         <div className="flex items-center justify-between text-sm">
-          <span className="font-medium text-gray-700">Total Distributed</span>
+          <span className="font-medium text-foreground">Total Distributed</span>
           <span
             className={`font-semibold ${
-              isOver ? 'text-red-600' : isValid ? 'text-green-600' : 'text-gray-600'
+              isOver ? 'text-destructive' : isValid ? 'text-emerald-700' : 'text-muted-foreground'
             }`}
           >
             {totalDistributed} / {totalQuestions}
@@ -85,7 +85,7 @@ export function DifficultyDistribution() {
         </div>
 
         {/* Visual Progress Bar */}
-        <div className="h-3 w-full bg-gray-200 rounded-full overflow-hidden flex">
+        <div className="flex h-3 w-full overflow-hidden rounded-full bg-muted">
           {difficultyLevels.map(({ key, color }) => {
             const percentage =
               totalQuestions > 0 ? (difficultyDistribution[key] / totalQuestions) * 100 : 0
@@ -104,7 +104,7 @@ export function DifficultyDistribution() {
 
         {/* Status Message */}
         {!isValid && (
-          <div className={`text-sm font-medium ${isOver ? 'text-red-600' : 'text-orange-600'}`}>
+          <div className={`text-sm font-medium ${isOver ? 'text-destructive' : 'text-amber-700'}`}>
             {isOver
               ? `Over by ${Math.abs(remaining)} question${Math.abs(remaining) !== 1 ? 's' : ''}. Reduce some values.`
               : `${remaining} question${remaining !== 1 ? 's' : ''} remaining to distribute.`}
@@ -112,7 +112,7 @@ export function DifficultyDistribution() {
         )}
 
         {isValid && (
-          <div className="flex items-center gap-2 text-sm font-medium text-green-600">
+          <div className="flex items-center gap-2 text-sm font-medium text-emerald-700">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
@@ -147,11 +147,11 @@ export function DifficultyDistribution() {
       </div>
 
       {/* Info Box */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+      <div className="rounded-lg border border-cyan-200 bg-cyan-50/80 p-4">
         <div className="flex gap-3">
           <div className="flex-shrink-0">
             <svg
-              className="w-5 h-5 text-blue-600"
+              className="h-5 w-5 text-cyan-700"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -164,9 +164,9 @@ export function DifficultyDistribution() {
               />
             </svg>
           </div>
-          <div className="text-sm text-blue-900">
+          <div className="text-sm text-cyan-950">
             <p className="font-medium mb-1">Tip: Use Auto-Distribute</p>
-            <p className="text-blue-700">
+            <p className="text-cyan-900">
               Click "Auto-Distribute" to use a balanced distribution (20% Very Easy, 20% Easy, 30%
               Moderate, 20% Hard, 10% Very Hard).
             </p>

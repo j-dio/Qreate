@@ -74,7 +74,6 @@ export function FileUploadZone() {
     })
   }, [uploadedFiles, updateFileStatus])
 
-
   /**
    * Handle drag over event
    *
@@ -130,7 +129,7 @@ export function FileUploadZone() {
    * Handle drop event
    *
    * Processes the dropped files
-   * 
+   *
    * IMPORTANT FIX: Standard drag-and-drop doesn't provide file paths due to browser security.
    * We need to get the paths through Electron's file system access for proper file processing.
    */
@@ -146,13 +145,13 @@ export function FileUploadZone() {
 
       // Get files from the drag event
       const droppedFiles = Array.from(e.dataTransfer.files)
-      
+
       if (droppedFiles.length === 0) return
 
       try {
         // For drag-and-drop, we need to handle files differently since they don't have file paths
         // We'll store the File object directly and handle extraction differently in the generation process
-        const filesWithMetadata = droppedFiles.map((file) => {
+        const filesWithMetadata = droppedFiles.map(file => {
           // Create a File object that marks it as a drag-and-drop file
           const fileWithMetadata = {
             ...file,
@@ -164,7 +163,7 @@ export function FileUploadZone() {
             // Mark this as a drag-and-drop file for special handling
             isDragAndDrop: true,
             // Store the actual File object for buffer extraction
-            _originalFile: file
+            _originalFile: file,
           } as File & { path?: string; isDragAndDrop: boolean; _originalFile: File }
 
           return fileWithMetadata
@@ -189,7 +188,9 @@ export function FileUploadZone() {
         setTimeout(() => setSuccessMessage(null), 3000)
       } catch (error) {
         console.error('Drop handling error:', error)
-        setValidationError('Failed to process dropped files. Please try using the Browse Files button instead.')
+        setValidationError(
+          'Failed to process dropped files. Please try using the Browse Files button instead.'
+        )
       }
     },
     [setIsDragging, uploadedFiles.length, totalSize, addFiles]
@@ -256,8 +257,8 @@ export function FileUploadZone() {
       <Card
         className={`border-2 border-dashed transition-all cursor-pointer ${
           isDragging
-            ? 'border-blue-500 bg-blue-50'
-            : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
+            ? 'border-primary bg-accent/70'
+            : 'border-border hover:border-primary/60 hover:bg-muted/40'
         }`}
         onDragOver={handleDragOver}
         onDragEnter={handleDragEnter}
@@ -269,12 +270,12 @@ export function FileUploadZone() {
           {/* Icon */}
           <div
             className={`rounded-full p-4 mb-4 transition-colors ${
-              isDragging ? 'bg-blue-100' : 'bg-gray-100'
+              isDragging ? 'bg-primary/15' : 'bg-muted'
             }`}
           >
             <Upload
               className={`h-8 w-8 transition-colors ${
-                isDragging ? 'text-blue-600' : 'text-gray-600'
+                isDragging ? 'text-primary' : 'text-muted-foreground'
               }`}
             />
           </div>
@@ -306,7 +307,7 @@ export function FileUploadZone() {
 
       {/* Validation Error Message */}
       {validationError && (
-        <Card className="border-red-200 bg-red-50">
+        <Card className="border-red-200 bg-red-50/90">
           <CardContent className="flex items-start gap-3 p-4">
             <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
             <div>
@@ -319,10 +320,10 @@ export function FileUploadZone() {
 
       {/* Success Message */}
       {successMessage && (
-        <Card className="border-green-200 bg-green-50">
+        <Card className="border-emerald-200 bg-emerald-50/90">
           <CardContent className="flex items-center gap-3 p-4">
-            <CheckCircle2 className="h-5 w-5 text-green-600" />
-            <p className="text-sm font-medium text-green-900">{successMessage}</p>
+            <CheckCircle2 className="h-5 w-5 text-emerald-700" />
+            <p className="text-sm font-medium text-emerald-900">{successMessage}</p>
           </CardContent>
         </Card>
       )}
@@ -332,7 +333,7 @@ export function FileUploadZone() {
         <Card>
           <CardContent className="flex items-center justify-between p-4">
             <div className="flex items-center gap-3">
-              <FileText className="h-5 w-5 text-gray-600" />
+              <FileText className="h-5 w-5 text-muted-foreground" />
               <div>
                 <p className="text-sm font-medium">
                   {uploadedFiles.length} / {rules.maxFiles} files selected

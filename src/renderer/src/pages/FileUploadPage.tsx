@@ -29,7 +29,7 @@
  */
 
 import { useEffect } from 'react'
-import { ArrowLeft, ArrowRight, Info } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BadgeInfo } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { FileUploadZone } from '../components/FileUploadZone'
 import { FileList } from '../components/FileList'
@@ -46,11 +46,11 @@ export function FileUploadPage() {
   // Reset all workflow state when entering exam creation
   useEffect(() => {
     console.log('[FileUploadPage] Resetting workflow state for new exam creation')
-    
+
     const clearAllFiles = useFileUploadStore.getState().clearAllFiles
     const resetAll = useExamConfigStore.getState().resetAll
     const reset = useExamGenerationStore.getState().reset
-    
+
     clearAllFiles()
     resetAll()
     reset()
@@ -121,27 +121,27 @@ export function FileUploadPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="page-shell">
       {/* Header with Progress */}
       <div>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+        <div className="step-kicker">
           <span>Phase 2: Exam Configuration</span>
           <span>•</span>
           <span>Step 1 of 4</span>
         </div>
-        <h2 className="text-3xl font-bold tracking-tight">Upload Study Materials</h2>
+        <h2 className="text-3xl font-extrabold tracking-tight">Upload Study Materials</h2>
         <p className="text-muted-foreground mt-1">
           Upload the documents you want to generate exam questions from
         </p>
       </div>
 
       {/* Instructions Card */}
-      <Card className="border-blue-200 bg-blue-50">
+      <Card className="border-cyan-200 bg-cyan-50/80">
         <CardContent className="flex items-start gap-3 p-4">
-          <Info className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
-          <div className="text-sm text-blue-900 space-y-2">
+          <BadgeInfo className="mt-0.5 h-5 w-5 flex-shrink-0 text-cyan-700" />
+          <div className="space-y-2 text-sm text-cyan-950">
             <p className="font-medium">How it works:</p>
-            <ol className="list-decimal list-inside space-y-1 text-blue-800">
+            <ol className="list-inside list-decimal space-y-1 text-cyan-900">
               <li>Upload your study materials (PDFs, documents, images, or text files)</li>
               <li>We'll extract the text content from your files</li>
               <li>Configure your exam preferences in the next steps</li>
@@ -158,7 +158,7 @@ export function FileUploadPage() {
       <FileList />
 
       {/* Status and Navigation */}
-      <div className="flex items-center justify-between pt-6 border-t">
+      <div className="flex items-center justify-between border-t border-border/80 pt-6">
         {/* Back Button */}
         <Button variant="outline" onClick={handleBack} className="gap-2">
           <ArrowLeft className="h-4 w-4" />
@@ -171,9 +171,9 @@ export function FileUploadPage() {
           <p
             className={`text-sm ${
               canProceed
-                ? 'text-green-600 font-medium'
+                ? 'font-semibold text-emerald-700'
                 : uploadedFiles.length > 0
-                  ? 'text-orange-600'
+                  ? 'text-amber-700'
                   : 'text-muted-foreground'
             }`}
           >

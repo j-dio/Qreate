@@ -10,14 +10,7 @@
  * - Usage quota display (Groq backend)
  */
 
-import {
-  Plus,
-  FileText,
-  Zap,
-  Calendar,
-  Hash,
-  ExternalLink,
-} from 'lucide-react'
+import { Plus, FileText, Gauge, CalendarClock, Hash, ArrowUpRight } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAppStore } from '../store/useAppStore'
 import { Button } from '../components/ui/Button'
@@ -66,7 +59,7 @@ const ExamCard = memo(({ exam }: { exam: ExamRecord }) => {
   return (
     <Card
       key={exam.id}
-      className="hover:shadow-md transition-shadow cursor-pointer"
+      className="cursor-pointer border-border/80 bg-card/90 transition-all hover:-translate-y-0.5 hover:shadow-md"
       onClick={() => {
         // Open PDF file using local file handler
         window.electron.openLocalFile(exam.file_path).catch(() => {
@@ -77,7 +70,7 @@ const ExamCard = memo(({ exam }: { exam: ExamRecord }) => {
       <CardHeader>
         <CardTitle className="line-clamp-2 text-base">{exam.title}</CardTitle>
         <CardDescription className="flex items-center gap-2 text-xs">
-          <Calendar className="h-3 w-3" />
+          <CalendarClock className="h-3 w-3" />
           {new Date(exam.created_at).toLocaleDateString('en-US', {
             year: 'numeric',
             month: 'short',
@@ -97,7 +90,7 @@ const ExamCard = memo(({ exam }: { exam: ExamRecord }) => {
               <Hash className="h-3 w-3" />
               {exam.total_questions} questions
             </span>
-            <span className="rounded-full px-2 py-1 text-xs font-medium bg-green-100 text-green-700">
+            <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-700">
               Ready
             </span>
           </div>
@@ -132,7 +125,11 @@ export function HomePage() {
 
       if (recentExamsResponse.success && recentExamsResponse.exams) {
         setRecentExams(recentExamsResponse.exams)
-        console.log('[HomePage] Loaded', recentExamsResponse.exams.length, 'recent exams (last 24h)')
+        console.log(
+          '[HomePage] Loaded',
+          recentExamsResponse.exams.length,
+          'recent exams (last 24h)'
+        )
       }
     } catch (error) {
       console.error('[HomePage] Failed to load recent exams:', error)
@@ -140,7 +137,6 @@ export function HomePage() {
       setIsLoadingExams(false)
     }
   }, [sessionToken, user])
-
 
   // Fetch usage status
   useEffect(() => {
@@ -169,7 +165,7 @@ export function HomePage() {
     <div className="space-y-8">
       {/* Welcome Section */}
       <div>
-        <h2 className="text-3xl font-bold tracking-tight min-h-[2.5rem]">
+        <h2 className="min-h-[2.5rem] text-3xl font-extrabold tracking-tight">
           {user ? `Welcome, ${user.name}!` : 'Welcome to Qreate!'}
         </h2>
         <p className="text-muted-foreground">Create AI-generated exams from your study materials</p>
@@ -177,13 +173,13 @@ export function HomePage() {
 
       {/* Usage Quota Banner */}
       {usageStatus ? (
-        <Card className="border-green-200 bg-green-50">
+        <Card className="border-emerald-200 bg-emerald-50/80">
           <CardContent className="flex items-center justify-between p-6">
             <div className="flex items-start gap-4">
-              <Zap className="h-6 w-6 text-green-600" />
+              <Gauge className="h-6 w-6 text-emerald-700" />
               <div>
-                <h3 className="text-lg font-semibold text-green-900">Free AI Exam Generation</h3>
-                <p className="text-sm text-green-700">
+                <h3 className="text-lg font-semibold text-emerald-950">Free AI Exam Generation</h3>
+                <p className="text-sm text-emerald-900">
                   <strong>
                     {Math.max(
                       0,
@@ -223,13 +219,13 @@ export function HomePage() {
         </Card>
       ) : (
         // Skeleton placeholder to prevent layout shift
-        <Card className="border-gray-200 bg-gray-50">
+        <Card className="border-border/70 bg-muted/40">
           <CardContent className="flex items-center justify-between p-6">
             <div className="flex items-start gap-4">
-              <div className="h-6 w-6 bg-gray-300 rounded animate-pulse" />
+              <div className="h-6 w-6 rounded bg-muted-foreground/30 animate-pulse" />
               <div>
-                <div className="h-5 w-40 bg-gray-300 rounded animate-pulse mb-2" />
-                <div className="h-4 w-80 bg-gray-300 rounded animate-pulse" />
+                <div className="mb-2 h-5 w-40 rounded bg-muted-foreground/30 animate-pulse" />
+                <div className="h-4 w-80 rounded bg-muted-foreground/20 animate-pulse" />
               </div>
             </div>
           </CardContent>
@@ -237,7 +233,7 @@ export function HomePage() {
       )}
 
       {/* Quick Action */}
-      <Card className="border-dashed">
+      <Card className="border-dashed border-border/80 bg-card/90">
         <CardContent className="flex items-center justify-between p-6">
           <div>
             <h3 className="text-lg font-semibold">Create New Exam</h3>
@@ -272,7 +268,6 @@ export function HomePage() {
         </CardContent>
       </Card>
 
-
       {/* Recent Exams */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
@@ -283,7 +278,7 @@ export function HomePage() {
             onClick={() => navigate('/my-exams')}
             className="gap-2"
           >
-            <ExternalLink className="h-4 w-4" />
+            <ArrowUpRight className="h-4 w-4" />
             View All
           </Button>
         </div>

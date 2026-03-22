@@ -17,7 +17,7 @@
  */
 
 import { useState, useEffect } from 'react'
-import { Minus, Plus } from 'lucide-react'
+import { Minus, Plus, CheckCircle2, Scale, Type, PencilLine } from 'lucide-react'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
 import { Card, CardContent } from './ui/Card'
@@ -31,6 +31,40 @@ interface QuestionTypeInputProps {
   disabled?: boolean
   min?: number
   max?: number
+}
+
+function renderQuestionTypeIcon(icon: string) {
+  switch (icon) {
+    case 'check-circle':
+      return <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
+    case 'scale':
+      return <Scale className="h-5 w-5" aria-hidden="true" />
+    case 'text-cursor':
+      return <Type className="h-5 w-5" aria-hidden="true" />
+    case 'pencil':
+      return <PencilLine className="h-5 w-5" aria-hidden="true" />
+    default:
+      return <Type className="h-5 w-5" aria-hidden="true" />
+  }
+}
+
+function getIconBadgeClasses(icon: string, isActive: boolean) {
+  if (!isActive) {
+    return 'bg-muted text-muted-foreground'
+  }
+
+  switch (icon) {
+    case 'check-circle':
+      return 'bg-emerald-100 text-emerald-700'
+    case 'scale':
+      return 'bg-cyan-100 text-cyan-700'
+    case 'text-cursor':
+      return 'bg-amber-100 text-amber-700'
+    case 'pencil':
+      return 'bg-rose-100 text-rose-700'
+    default:
+      return 'bg-primary/15 text-primary'
+  }
 }
 
 export function QuestionTypeInput({
@@ -176,11 +210,9 @@ export function QuestionTypeInput({
           <div className="flex items-start gap-3 flex-1 min-w-0">
             {/* Icon */}
             <div
-              className={`text-2xl flex-shrink-0 w-10 h-10 flex items-center justify-center rounded ${
-                isActive ? 'bg-blue-100' : 'bg-gray-100'
-              }`}
+              className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded ${getIconBadgeClasses(icon, isActive)}`}
             >
-              {icon}
+              {renderQuestionTypeIcon(icon)}
             </div>
 
             {/* Label & Description */}
