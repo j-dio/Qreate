@@ -36,10 +36,18 @@ let mainWindow: BrowserWindow | null = null
  * Creates the main application window
  */
 function createWindow(): void {
-  const iconCandidates = [
-    path.join(process.cwd(), 'src/renderer/public/qreate-logo.png'),
-    path.join(__dirname, '../renderer/qreate-logo.png'),
-  ]
+  const iconCandidates =
+    process.platform === 'win32'
+      ? [
+          path.join(process.cwd(), 'build/icons/qreate.ico'),
+          path.join(app.getAppPath(), 'build/icons/qreate.ico'),
+          path.join(process.cwd(), 'src/renderer/public/qreate-logo.png'),
+          path.join(__dirname, '../renderer/qreate-logo.png'),
+        ]
+      : [
+          path.join(process.cwd(), 'src/renderer/public/qreate-logo.png'),
+          path.join(__dirname, '../renderer/qreate-logo.png'),
+        ]
   const iconPath = iconCandidates.find(candidate => existsSync(candidate))
 
   mainWindow = new BrowserWindow({
