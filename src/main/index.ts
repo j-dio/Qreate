@@ -22,11 +22,10 @@ import { existsSync } from 'fs'
 import { FileTextExtractor } from './services/FileTextExtractor'
 import { GoogleDriveService } from './services/GoogleDriveService'
 import { PDFGenerator } from './services/PDFGenerator'
-import { GroqProvider } from './services/GroqProvider'
+import { ProviderFactory } from './services/ProviderFactory'
 import { RateLimiter } from './services/RateLimiter'
 import { DatabaseService } from './services/DatabaseService'
 import { UsageTrackingService } from './services/UsageTrackingService'
-import { ExamQualityValidator } from './services/ExamQualityValidator'
 import { ExamParser } from '../shared/services/ExamParser'
 import { AuthService } from './services/AuthService'
 
@@ -80,9 +79,9 @@ function createWindow(): void {
  */
 
 // When Electron is ready, create window and register IPC handlers
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   createWindow()
-  registerIpcHandlers()
+  await registerIpcHandlers()
 
   // On macOS, re-create window when dock icon is clicked
   app.on('activate', () => {
@@ -116,7 +115,7 @@ app.on('web-contents-created', (_, contents) => {
  *
  * Register handlers for communication between renderer and main process.
  */
-function registerIpcHandlers(): void {
+async function registerIpcHandlers(): Promise<void> {
   // Initialize services
   const fileTextExtractor = new FileTextExtractor()
   const googleDriveService = new GoogleDriveService()
@@ -129,20 +128,16 @@ function registerIpcHandlers(): void {
 
   // Authentication system is now complete - real users will register through the UI
 
-  // Initialize Groq provider (backend-managed)
-  let groqProvider: GroqProvider | null = null
+  // Initialize AI Provider Factory (supports multiple providers)
+  const providerFactory = new ProviderFactory()
   const rateLimiter = new RateLimiter() // Global rate limiter instance
 
   try {
-    const groqApiKey = process.env.GROQ_API_KEY
-    if (groqApiKey) {
-      groqProvider = new GroqProvider(groqApiKey)
-      console.log('[Groq] Provider initialized successfully')
-    } else {
-      console.warn('[Groq] API key not found in environment variables')
-    }
+    await providerFactory.initialize()
+    console.log('[ProviderFactory] AI providers initialized successfully')
   } catch (error) {
-    console.error('[Groq] Failed to initialize provider:', error)
+    console.error('[ProviderFactory] Failed to initialize providers:', error)
+    // Continue running but AI generation will fail gracefully
   }
 
   /**
@@ -456,28 +451,42 @@ function registerIpcHandlers(): void {
   })
 
   /**
-   * Groq: Test connection
+   * AI Provider: Test connection
    *
-   * Verifies Groq API is working (backend-managed, no API key needed from user)
+   * Verifies AI provider is working (backend-managed, no API key needed from user)
    */
-  ipcMain.handle('groq-test-connection', async () => {
-    console.log('[IPC] Test Groq connection')
-    if (!groqProvider) {
-      return {
-        success: false,
-        message: 'Groq provider not initialized',
-        details: 'Please set GROQ_API_KEY in .env.local',
-      }
-    }
+  ipcMain.handle('ai-test-connection', async () => {
+    console.log('[IPC] Test AI provider connection')
 
     try {
-      return await groqProvider.testConnection()
+      const result = await providerFactory.testConnection()
+      return {
+        ...result,
+        success: result.success,
+        providerInfo: providerFactory.getProviderInfo()
+      }
     } catch (error) {
-      console.error('[IPC] Groq connection test failed:', error)
+      console.error('[IPC] AI provider connection test failed:', error)
       return {
         success: false,
-        message: 'Connection test failed',
-        details: error instanceof Error ? error.message : 'Unknown error',
+        message: error instanceof Error ? error.message : 'Connection test failed',
+      }
+    }
+  })
+
+  /**
+   * Legacy Groq: Test connection (for backward compatibility)
+   */
+  ipcMain.handle('groq-test-connection', async () => {
+    console.log('[IPC] Test connection (legacy groq handler)')
+
+    try {
+      return await providerFactory.testConnection()
+    } catch (error) {
+      console.error('[IPC] AI provider test failed:', error)
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Provider not available',
       }
     }
   })
@@ -516,14 +525,32 @@ function registerIpcHandlers(): void {
   })
 
   /**
-   * Groq: Generate exam
+   * AI Provider: Get provider information
+   */
+  ipcMain.handle('ai-get-provider-info', async () => {
+    console.log('[IPC] Get AI provider information')
+
+    try {
+      return { success: true, providerInfo: providerFactory.getProviderInfo() }
+    } catch (error) {
+      console.error('[IPC] Failed to get provider info:', error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to get provider info'
+      }
+    }
+  })
+
+  /**
+   * AI Provider: Generate exam
    *
-   * Backend-managed exam generation using Groq API.
+   * Backend-managed exam generation using configurable AI providers (Gemini, Groq).
    * No API key required from user - handled server-side.
    *
    * Features:
-   * - Per-user quotas (10/day, 100/month)
-   * - Global rate limiting (30 req/min, 14.4k req/day)
+   * - Multi-provider support (Gemini, Groq) with automatic fallback
+   * - Per-user quotas (10/week, 3/day burst, 40/month) 
+   * - Global rate limiting and usage tracking
    * - Retry logic with exponential backoff
    * - Usage tracking in SQLite database
    *
@@ -535,7 +562,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle(
     'groq-generate-exam',
     async (_, config: any, sourceText: string, userId: number) => {
-      console.log('[IPC] Generate exam with Groq:', {
+      console.log('[IPC] Generate exam with AI provider:', {
         userId,
         totalQuestions: config.totalQuestions,
         sourceTextLength: sourceText.length,
@@ -548,10 +575,14 @@ function registerIpcHandlers(): void {
         }
       }
 
-      if (!groqProvider) {
+      // Check if provider is available
+      try {
+        providerFactory.getCurrentProvider()
+        console.log('[IPC] Using provider: together-ai (TogetherProvider)')
+      } catch {
         return {
           success: false,
-          error: 'Groq provider not initialized. Please contact support.',
+          error: 'AI provider not initialized. Please check your TOGETHER_API_KEY in .env.local.',
         }
       }
 
@@ -584,51 +615,26 @@ function registerIpcHandlers(): void {
       }
 
       try {
-        const rawExamContent = await groqProvider.generateExam(config, sourceText)
-
-        // Post-processing safety net: Clean any literal instructions
-        console.log('[IPC] Applying post-processing cleanup...')
-        const qualityValidator = new ExamQualityValidator(sourceText)
-        const literalCheck = qualityValidator.detectLiteralInstructions(rawExamContent)
-        
-        let examContent = rawExamContent
-        if (literalCheck.found) {
-          console.log(`[IPC] Found ${literalCheck.patterns.length} literal instructions, cleaning...`, literalCheck.patterns)
-          examContent = qualityValidator.cleanLiteralInstructions(rawExamContent)
-          console.log('[IPC] Post-processing cleanup completed')
-        } else {
-          console.log('[IPC] No literal instructions found, content is clean')
-        }
+        const { content: examContent, providerUsed, actualQuestions } = await providerFactory.generateExam(config, sourceText)
 
         // Parse the exam content into structured format
         console.log('[IPC] Parsing generated exam content...')
         const examParser = new ExamParser()
         const questions = examParser.parseExam(examContent)
 
-        // Create exam object for validation
+        // Create exam object
         const exam = {
           id: `exam-${Date.now()}-${userId}`,
-          topic: 'Generated Exam', // TODO: Extract from content
+          topic: 'Generated Exam',
           questions,
           createdAt: new Date(),
           totalQuestions: questions.length,
           metadata: {
             sourceFiles: [], // Will be populated by renderer
-            aiProvider: 'groq',
+            aiProvider: providerUsed,
             generationTime: 0,
           },
         }
-
-        // Perform comprehensive quality validation
-        console.log('[IPC] Performing quality validation...')
-        const validationResult = await qualityValidator.validateExam(exam)
-
-        console.log('[IPC] Quality validation complete:', {
-          valid: validationResult.isValid,
-          score: validationResult.overallQualityScore.toFixed(3),
-          duplicates: validationResult.duplicatesFound,
-          sourceIssues: validationResult.sourceIssues,
-        })
 
         // Record successful request for rate limiting
         rateLimiter.recordRequest()
@@ -642,16 +648,10 @@ function registerIpcHandlers(): void {
         return {
           success: true,
           content: examContent,
-          exam: exam, // Include structured exam data
-          qualityMetrics: {
-            score: validationResult.overallQualityScore,
-            isValid: validationResult.isValid,
-            metrics: validationResult.metrics,
-            duplicatesFound: validationResult.duplicatesFound,
-            sourceIssues: validationResult.sourceIssues,
-            difficultyIssues: validationResult.difficultyIssues,
-            recommendations: validationResult.recommendations,
-          },
+          providerUsed,
+          actualQuestions,
+          requestedQuestions: config.totalQuestions,
+          exam: exam,
           usageStatus: updatedUsage,
         }
       } catch (error) {

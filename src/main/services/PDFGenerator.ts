@@ -200,7 +200,7 @@ ${content}
   </div>
 
   <div class="footer">
-    Generated with Qreate - AI-Powered Exam Creator | ${metadata?.aiProvider || 'Groq AI'}
+    Generated with Qreate - AI-Powered Exam Creator | ${metadata?.aiProvider || 'Together AI (Backend)'}
   </div>
 </body>
 </html>`

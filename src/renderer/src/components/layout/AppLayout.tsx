@@ -14,7 +14,14 @@
  * └─────────────────────────────────┘
  */
 
-import { FileText, LogOut, Settings, FolderOpen, Plus, Home } from 'lucide-react'
+import {
+  GraduationCap,
+  Signpost,
+  SlidersHorizontal,
+  FolderKanban,
+  PlusCircle,
+  UserCircle2,
+} from 'lucide-react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAppStore } from '../../store/useAppStore'
 import { Button } from '../ui/Button'
@@ -39,23 +46,25 @@ export function AppLayout({ children }: AppLayoutProps) {
   return (
     <div className="flex h-screen flex-col bg-background">
       {/* Header */}
-      <header className="border-b bg-card">
-        <div className="flex h-16 items-center px-6">
+      <header className="border-b border-border/70 bg-card/95 backdrop-blur">
+        <div className="flex min-h-16 items-center px-6 py-2">
           {/* Logo */}
           <div className="flex items-center gap-2">
-            <FileText className="h-6 w-6 text-primary" />
-            <h1 className="text-xl font-bold">Qreate</h1>
+            <div className="rounded-lg bg-primary/15 p-2 text-primary">
+              <GraduationCap className="h-5 w-5" />
+            </div>
+            <h1 className="text-xl font-extrabold">Qreate</h1>
           </div>
 
           {/* Navigation */}
-          <nav className="flex items-center gap-1 ml-8">
+          <nav className="ml-8 flex items-center gap-1 rounded-xl border border-border/70 bg-muted/50 p-1">
             <Button
               variant={location.pathname === '/' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => navigate('/')}
               className="gap-2"
             >
-              <Home className="h-4 w-4" />
+              <Signpost className="h-4 w-4" />
               Home
             </Button>
             <Button
@@ -64,7 +73,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               onClick={() => navigate('/my-exams')}
               className="gap-2"
             >
-              <FolderOpen className="h-4 w-4" />
+              <FolderKanban className="h-4 w-4" />
               My Exams
             </Button>
             <Button
@@ -73,7 +82,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               onClick={() => navigate('/create-exam')}
               className="gap-2"
             >
-              <Plus className="h-4 w-4" />
+              <PlusCircle className="h-4 w-4" />
               Create Exam
             </Button>
           </nav>
@@ -85,8 +94,8 @@ export function AppLayout({ children }: AppLayoutProps) {
           <div className="flex items-center gap-4">
             {user ? (
               <>
-                <div className="text-sm">
-                  <p className="font-medium">{user.name}</p>
+                <div className="rounded-lg border border-border/70 bg-background/80 px-3 py-2 text-sm">
+                  <p className="font-semibold">{user.name}</p>
                   <p className="text-xs text-muted-foreground">{user.email}</p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -96,11 +105,11 @@ export function AppLayout({ children }: AppLayoutProps) {
                     onClick={() => navigate('/settings')}
                     className="gap-2"
                   >
-                    <Settings className="h-4 w-4" />
+                    <SlidersHorizontal className="h-4 w-4" />
                     Settings
                   </Button>
                   <Button variant="ghost" size="sm" onClick={handleLogout} className="gap-2">
-                    <LogOut className="h-4 w-4" />
+                    <UserCircle2 className="h-4 w-4" />
                     Logout
                   </Button>
                 </div>
@@ -114,7 +123,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
       {/* Main Content */}
       <main className="flex-1 overflow-auto">
-        <div className="container mx-auto p-6">{children}</div>
+        <div className="container mx-auto px-4 py-6 md:px-6">{children}</div>
       </main>
     </div>
   )

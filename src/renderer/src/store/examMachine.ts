@@ -40,9 +40,6 @@ export interface ExamTypeConfig {
   trueFalse: number
   fillInBlanks: number
   shortAnswer: number
-  essay: number
-  matching: number
-  identification: number
 }
 
 /**
@@ -113,9 +110,6 @@ export const examMachine = createMachine(
         trueFalse: 0,
         fillInBlanks: 0,
         shortAnswer: 0,
-        essay: 0,
-        matching: 0,
-        identification: 0,
       },
       difficulty: {
         veryEasy: 0,

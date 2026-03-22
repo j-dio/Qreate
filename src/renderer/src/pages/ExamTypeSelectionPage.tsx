@@ -27,7 +27,7 @@
  * - Easy navigation back
  */
 
-import { ArrowLeft, ArrowRight, Info } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BadgeInfo } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { ExamTypeSelection } from '../components/ExamTypeSelection'
 import { Button } from '../components/ui/Button'
@@ -71,35 +71,35 @@ export function ExamTypeSelectionPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="page-shell">
       {/* Header with Progress */}
       <div>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+        <div className="step-kicker">
           <span>Phase 2: Exam Configuration</span>
           <span>•</span>
           <span>Step 2 of 4</span>
         </div>
-        <h2 className="text-3xl font-bold tracking-tight">Configure Question Types</h2>
+        <h2 className="text-3xl font-extrabold tracking-tight">Configure Question Types</h2>
         <p className="text-muted-foreground mt-1">
-          Choose which types of questions you want and how many of each
+          Choose which types of questions to include and set your total question cap
         </p>
       </div>
 
       {/* Instructions Card */}
-      <Card className="border-blue-200 bg-blue-50">
+      <Card className="border-cyan-200 bg-cyan-50/80">
         <CardContent className="flex items-start gap-3 p-4">
-          <Info className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
-          <div className="text-sm text-blue-900 space-y-2">
+          <BadgeInfo className="mt-0.5 h-5 w-5 flex-shrink-0 text-cyan-700" />
+          <div className="space-y-2 text-sm text-cyan-950">
             <p className="font-medium">Tips for selecting question types:</p>
-            <ul className="list-disc list-inside space-y-1 text-blue-800">
+            <ul className="list-inside list-disc space-y-1 text-cyan-900">
               <li>
                 Use <strong>Quick Presets</strong> for common exam configurations
               </li>
               <li>
-                Mix different types for comprehensive assessment (e.g., Multiple Choice + Essays)
+                Check multiple types — the AI picks the best fit for each concept automatically
               </li>
-              <li>Total must be between 10-200 questions</li>
-              <li>You can adjust quantities with +/- buttons or type directly</li>
+              <li>Total cap must be between 10–50 questions</li>
+              <li>At least one question type must be selected</li>
             </ul>
           </div>
         </CardContent>
@@ -109,7 +109,7 @@ export function ExamTypeSelectionPage() {
       <ExamTypeSelection />
 
       {/* Navigation */}
-      <div className="flex items-center justify-between pt-6 border-t">
+      <div className="flex items-center justify-between border-t border-border/80 pt-6">
         {/* Back Button */}
         <Button variant="outline" onClick={handleBack} className="gap-2">
           <ArrowLeft className="h-4 w-4" />
@@ -123,7 +123,7 @@ export function ExamTypeSelectionPage() {
           className="gap-2"
           title={
             !canProceed
-              ? 'Configure at least 10 questions to continue'
+              ? 'Select at least one type and set 10–50 questions to continue'
               : 'Proceed to difficulty distribution'
           }
         >

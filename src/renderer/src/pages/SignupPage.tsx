@@ -19,7 +19,7 @@
 
 import { useState, FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { FileText, Check, X } from 'lucide-react'
+import { GraduationCap, Check, X } from 'lucide-react'
 import { Input } from '../components/ui/Input'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
@@ -105,7 +105,11 @@ export function SignupPage() {
 
     try {
       // Call real authentication API
-      const result = await window.electron.auth.register(formData.name, formData.email, formData.password)
+      const result = await window.electron.auth.register(
+        formData.name,
+        formData.email,
+        formData.password
+      )
 
       if (result.success && result.user && result.sessionToken) {
         // Set user and session in store
@@ -143,15 +147,17 @@ export function SignupPage() {
       <div className="w-full max-w-md space-y-8">
         {/* Logo and Title */}
         <div className="flex flex-col items-center space-y-2">
-          <div className="flex items-center gap-2">
-            <FileText className="h-8 w-8 text-primary" />
-            <h1 className="text-3xl font-bold">Qreate</h1>
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl bg-primary/15 p-2.5 text-primary">
+              <GraduationCap className="h-6 w-6" />
+            </div>
+            <h1 className="text-3xl font-extrabold">Qreate</h1>
           </div>
           <p className="text-sm text-muted-foreground">AI-powered exam generation</p>
         </div>
 
         {/* Signup Card */}
-        <Card>
+        <Card className="border-border/80 bg-card/95">
           <CardHeader>
             <CardTitle>Create an account</CardTitle>
             <CardDescription>Get started with Qreate for free</CardDescription>
@@ -160,7 +166,7 @@ export function SignupPage() {
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* General Error */}
               {errors.general && (
-                <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                <div className="rounded-lg border border-destructive/25 bg-destructive/10 p-3 text-sm text-destructive">
                   {errors.general}
                 </div>
               )}
@@ -202,7 +208,7 @@ export function SignupPage() {
 
                 {/* Password Requirements Checklist */}
                 {showPasswordRequirements && formData.password && (
-                  <div className="mt-2 space-y-1 rounded-md border border-border bg-muted/50 p-3">
+                  <div className="mt-2 space-y-1 rounded-lg border border-border/80 bg-muted/40 p-3">
                     <p className="text-xs font-medium text-muted-foreground">
                       Password requirements:
                     </p>
@@ -212,7 +218,7 @@ export function SignupPage() {
                         <div
                           key={index}
                           className={`flex items-center gap-2 text-xs ${
-                            isMet ? 'text-green-600' : 'text-muted-foreground'
+                            isMet ? 'text-emerald-700' : 'text-muted-foreground'
                           }`}
                         >
                           {isMet ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}

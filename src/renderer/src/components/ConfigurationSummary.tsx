@@ -12,7 +12,7 @@
  */
 
 import { useNavigate } from 'react-router-dom'
-import { FileText, Edit, CheckCircle } from 'lucide-react'
+import { Files, PencilLine, CheckCircle } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/Card'
 import { Button } from './ui/Button'
 import { useFileUploadStore } from '../store/useFileUploadStore'
@@ -26,7 +26,7 @@ export function ConfigurationSummary() {
   const uploadedFiles = useFileUploadStore(state => state.uploadedFiles)
   const questionTypes = useExamConfigStore(state => state.questionTypes)
   const difficultyDistribution = useExamConfigStore(state => state.difficultyDistribution)
-  const totalQuestions = useExamConfigStore(state => state.getTotalQuestions())
+  const totalQuestions = useExamConfigStore(state => state.totalQuestions)
 
   // Format file size
   const formatFileSize = (bytes: number): string => {
@@ -42,9 +42,6 @@ export function ConfigurationSummary() {
       trueFalse: 'True/False',
       fillInTheBlanks: 'Fill in the Blanks',
       shortAnswer: 'Short Answer',
-      essay: 'Essay',
-      matching: 'Matching',
-      identification: 'Identification',
     }
     return labels[type]
   }
@@ -63,11 +60,11 @@ export function ConfigurationSummary() {
   // Get difficulty color
   const getDifficultyColor = (level: DifficultyLevel): string => {
     const colors: Record<DifficultyLevel, string> = {
-      veryEasy: 'bg-green-100 text-green-700',
-      easy: 'bg-blue-100 text-blue-700',
-      moderate: 'bg-yellow-100 text-yellow-700',
-      hard: 'bg-orange-100 text-orange-700',
-      veryHard: 'bg-red-100 text-red-700',
+      veryEasy: 'bg-emerald-500',
+      easy: 'bg-cyan-500',
+      moderate: 'bg-amber-500',
+      hard: 'bg-orange-500',
+      veryHard: 'bg-rose-500',
     }
     return colors[level]
   }
@@ -80,7 +77,7 @@ export function ConfigurationSummary() {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-blue-600" />
+                <Files className="h-5 w-5 text-primary" />
                 Uploaded Files
               </CardTitle>
               <CardDescription>{uploadedFiles.length} file(s) ready for processing</CardDescription>
@@ -91,7 +88,7 @@ export function ConfigurationSummary() {
               onClick={() => navigate('/create-exam')}
               className="flex items-center gap-2"
             >
-              <Edit className="h-4 w-4" />
+              <PencilLine className="h-4 w-4" />
               Edit
             </Button>
           </div>
@@ -101,18 +98,18 @@ export function ConfigurationSummary() {
             {uploadedFiles.map(file => (
               <div
                 key={file.id}
-                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                className="flex items-center justify-between rounded-lg border border-border/70 bg-muted/40 p-3"
               >
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-blue-100 rounded">
-                    <FileText className="h-4 w-4 text-blue-600" />
+                  <div className="rounded p-2 bg-primary/15">
+                    <Files className="h-4 w-4 text-primary" />
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-900">{file.name}</p>
-                    <p className="text-xs text-gray-500">{formatFileSize(file.size)}</p>
+                    <p className="text-sm font-medium text-foreground">{file.name}</p>
+                    <p className="text-xs text-muted-foreground">{formatFileSize(file.size)}</p>
                   </div>
                 </div>
-                {file.status === 'valid' && <CheckCircle className="h-4 w-4 text-green-600" />}
+                {file.status === 'valid' && <CheckCircle className="h-4 w-4 text-emerald-700" />}
               </div>
             ))}
           </div>
@@ -125,7 +122,7 @@ export function ConfigurationSummary() {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>Question Types</CardTitle>
-              <CardDescription>{totalQuestions} total questions</CardDescription>
+              <CardDescription>Up to {totalQuestions} questions — AI assigns best type per concept</CardDescription>
             </div>
             <Button
               variant="ghost"
@@ -133,24 +130,24 @@ export function ConfigurationSummary() {
               onClick={() => navigate('/create-exam/types')}
               className="flex items-center gap-2"
             >
-              <Edit className="h-4 w-4" />
+              <PencilLine className="h-4 w-4" />
               Edit
             </Button>
           </div>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 gap-3">
-            {(Object.entries(questionTypes) as [QuestionType, number][])
-              .filter(([_, count]) => count > 0)
-              .map(([type, count]) => (
+            {(Object.entries(questionTypes) as [QuestionType, boolean][])
+              .filter(([_, enabled]) => enabled)
+              .map(([type]) => (
                 <div
                   key={type}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                  className="flex items-center gap-2 rounded-lg border border-border/70 bg-muted/40 p-3"
                 >
-                  <span className="text-sm font-medium text-gray-700">
+                  <CheckCircle className="h-4 w-4 text-emerald-700 flex-shrink-0" />
+                  <span className="text-sm font-medium text-foreground">
                     {getQuestionTypeLabel(type)}
                   </span>
-                  <span className="text-sm font-semibold text-blue-600">{count}</span>
                 </div>
               ))}
           </div>
@@ -171,7 +168,7 @@ export function ConfigurationSummary() {
               onClick={() => navigate('/create-exam/difficulty')}
               className="flex items-center gap-2"
             >
-              <Edit className="h-4 w-4" />
+              <PencilLine className="h-4 w-4" />
               Edit
             </Button>
           </div>
@@ -185,14 +182,16 @@ export function ConfigurationSummary() {
                 return (
                   <div key={level} className="space-y-1">
                     <div className="flex items-center justify-between text-sm">
-                      <span className="font-medium text-gray-700">{getDifficultyLabel(level)}</span>
-                      <span className="text-gray-600">
+                      <span className="font-medium text-foreground">
+                        {getDifficultyLabel(level)}
+                      </span>
+                      <span className="text-muted-foreground">
                         {count} ({percentage.toFixed(0)}%)
                       </span>
                     </div>
-                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div className="h-2 overflow-hidden rounded-full bg-muted">
                       <div
-                        className={`h-full ${getDifficultyColor(level).split(' ')[0]} transition-all duration-300`}
+                        className={`h-full ${getDifficultyColor(level)} transition-all duration-300`}
                         style={{ width: `${percentage}%` }}
                       />
                     </div>

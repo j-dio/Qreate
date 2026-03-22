@@ -96,7 +96,18 @@ const electronAPI = {
     return ipcRenderer.invoke('generate-exam-pdf', examData, outputPath)
   },
 
-  // Groq AI operations (backend-managed)
+  // AI Provider operations (backend-managed, Together AI with Qwen3-235B)
+  ai: {
+    testConnection: () => {
+      return ipcRenderer.invoke('ai-test-connection')
+    },
+
+    getProviderInfo: () => {
+      return ipcRenderer.invoke('ai-get-provider-info')
+    },
+  },
+
+  // Legacy Groq AI operations (for backward compatibility)
   groq: {
     testConnection: () => {
       return ipcRenderer.invoke('groq-test-connection')

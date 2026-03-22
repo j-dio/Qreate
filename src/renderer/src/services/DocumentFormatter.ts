@@ -108,10 +108,7 @@ export class DocumentFormatter {
       multipleChoice: [],
       trueFalse: [],
       fillInTheBlanks: [],
-      identification: [],
       shortAnswer: [],
-      essay: [],
-      matching: [],
     }
 
     for (const question of questions) {
@@ -131,10 +128,7 @@ export class DocumentFormatter {
       multipleChoice: 'Multiple Choice',
       trueFalse: 'True/False',
       fillInTheBlanks: 'Fill in the Blanks',
-      identification: 'Identification',
       shortAnswer: 'Short Answer',
-      essay: 'Essay',
-      matching: 'Matching',
     }
 
     return headers[type] || type

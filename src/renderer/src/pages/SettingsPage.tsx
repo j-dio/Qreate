@@ -1,14 +1,22 @@
 /**
  * Settings Page
  *
- * UPDATED FOR GROQ BACKEND:
+ * UPDATED FOR TOGETHER AI BACKEND:
  * - No longer requires user API keys
  * - Shows backend AI provider info
  * - Displays account and usage information
  */
 
 import { useNavigate } from 'react-router-dom'
-import { CheckCircle2, Zap, Sparkles, TrendingUp, Calendar } from 'lucide-react'
+import {
+  CheckCircle2,
+  Gauge,
+  Sparkles,
+  Loader2,
+  ChartNoAxesColumn,
+  CalendarClock,
+  AlertCircle,
+} from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
 import { useAppStore } from '../store/useAppStore'
@@ -16,18 +24,33 @@ import { useEffect, useState } from 'react'
 
 interface UsageStatus {
   success: boolean
+  canGenerate: boolean
   usage: {
     examsToday: number
+    examsThisWeek: number
     examsThisMonth: number
     totalExams: number
   }
   limits: {
-    examsPerDay: number
+    examsPerWeek: number
+    dailyBurstLimit: number
     examsPerMonth: number
   }
   resetTimes: {
     dailyResetIn: number
+    weeklyResetIn: number
     monthlyResetIn: number
+  }
+}
+
+interface ProviderStatus {
+  loading: boolean
+  connected: boolean
+  message: string
+  providerInfo?: {
+    provider?: string
+    primaryModel?: string
+    fallbackModel?: string
   }
 }
 
@@ -35,69 +58,156 @@ export function SettingsPage() {
   const navigate = useNavigate()
   const user = useAppStore(state => state.user)
   const [usageStatus, setUsageStatus] = useState<UsageStatus | null>(null)
+  const [providerStatus, setProviderStatus] = useState<ProviderStatus>({
+    loading: true,
+    connected: false,
+    message: 'Checking AI provider status...',
+  })
 
-  // Fetch usage status on mount
+  // Fetch usage status and provider status
   useEffect(() => {
-    const fetchUsageStatus = async () => {
+    const fetchStatus = async () => {
       try {
-        const result = await window.electron.groq.getUsageStatus()
-        if (result.success) {
-          setUsageStatus(result as UsageStatus)
+        const connectionResult = await window.electron.ai.testConnection()
+
+        if (connectionResult.success) {
+          const providerInfoResult = await window.electron.ai.getProviderInfo()
+          setProviderStatus({
+            loading: false,
+            connected: true,
+            message: connectionResult.message || 'Connected to Together AI backend',
+            providerInfo: providerInfoResult.success ? providerInfoResult.providerInfo : undefined,
+          })
+        } else {
+          setProviderStatus({
+            loading: false,
+            connected: false,
+            message: connectionResult.message || 'AI provider is unavailable',
+          })
+        }
+
+        if (user?.id) {
+          const userId = parseInt(user.id)
+          if (!Number.isNaN(userId)) {
+            const usageResult = await window.electron.groq.getUsageStatus(userId)
+            if (usageResult.success) {
+              setUsageStatus(usageResult as UsageStatus)
+            }
+          }
         }
       } catch (error) {
-        console.error('[SettingsPage] Failed to fetch usage status:', error)
+        console.error('[SettingsPage] Failed to fetch provider/usage status:', error)
+        setProviderStatus({
+          loading: false,
+          connected: false,
+          message: 'Failed to connect to AI backend',
+        })
       }
     }
 
-    fetchUsageStatus()
-  }, [])
+    fetchStatus()
+  }, [user?.id])
 
   return (
     <div className="space-y-8">
       {/* Page Header */}
       <div>
-        <h2 className="text-3xl font-bold tracking-tight">Settings</h2>
+        <h2 className="text-3xl font-extrabold tracking-tight">Settings</h2>
         <p className="text-muted-foreground">Manage your account and view usage statistics</p>
       </div>
 
       {/* AI Provider Info */}
-      <Card className="border-green-200 bg-green-50">
+      <Card
+        className={
+          providerStatus.loading
+            ? 'border-sky-200 bg-sky-50/80'
+            : providerStatus.connected
+              ? 'border-emerald-200 bg-emerald-50/80'
+              : 'border-red-200 bg-red-50/80'
+        }
+      >
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-green-600" />
-            AI Exam Generation (Powered by Groq)
+            <Sparkles
+              className={`h-5 w-5 ${
+                providerStatus.loading
+                  ? 'text-sky-700'
+                  : providerStatus.connected
+                    ? 'text-emerald-700'
+                    : 'text-red-700'
+              }`}
+            />
+            AI Exam Generation (Powered by Together AI)
           </CardTitle>
           <CardDescription>
-            Free, fast, and reliable exam generation - no API keys required!
+            Backend-managed generation using Together AI with automatic fallback.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center gap-2 text-green-700">
-            <CheckCircle2 className="h-5 w-5" />
-            <span className="font-semibold">Backend AI Service Active</span>
+          <div
+            className={`flex items-center gap-2 ${
+              providerStatus.loading
+                ? 'text-sky-800'
+                : providerStatus.connected
+                  ? 'text-emerald-800'
+                  : 'text-red-800'
+            }`}
+          >
+            {providerStatus.loading ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : providerStatus.connected ? (
+              <CheckCircle2 className="h-5 w-5" />
+            ) : (
+              <AlertCircle className="h-5 w-5" />
+            )}
+            <span className="font-semibold">
+              {providerStatus.loading
+                ? 'Checking backend AI service...'
+                : providerStatus.connected
+                  ? 'Backend AI Service Active'
+                  : 'Backend AI Service Unavailable'}
+            </span>
           </div>
 
           <div className="grid gap-3 text-sm">
             <div className="flex justify-between">
-              <span className="text-muted-foreground">AI Model:</span>
-              <span className="font-medium">Groq Llama 3.3 70B</span>
+              <span className="text-muted-foreground">Primary Model:</span>
+              <span className="font-medium">
+                {providerStatus.providerInfo?.primaryModel || 'Qwen/Qwen3-235B-A22B'}
+              </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Speed:</span>
-              <span className="font-medium">~8 seconds for 100 questions</span>
+              <span className="text-muted-foreground">Fallback Model:</span>
+              <span className="font-medium">
+                {providerStatus.providerInfo?.fallbackModel || 'llama-3.3-70b-versatile'}
+              </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Reliability:</span>
-              <span className="font-medium text-green-600">100% Success Rate</span>
+              <span className="text-muted-foreground">Estimated Time:</span>
+              <span className="font-medium">~3 minutes for larger exams</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Connection:</span>
+              <span
+                className={`font-medium ${
+                  providerStatus.connected ? 'text-emerald-700' : 'text-red-700'
+                }`}
+              >
+                {providerStatus.loading
+                  ? 'Checking...'
+                  : providerStatus.connected
+                    ? 'Connected'
+                    : 'Disconnected'}
+              </span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Cost:</span>
-              <span className="font-medium text-green-600">Completely FREE</span>
+              <span className="font-medium text-emerald-700">Completely FREE</span>
             </div>
           </div>
 
           <div className="pt-2 border-t text-xs text-muted-foreground">
-            No API key setup required - we handle everything for you!
+            {providerStatus.message}
           </div>
         </CardContent>
       </Card>
@@ -107,7 +217,7 @@ export function SettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5" />
+              <ChartNoAxesColumn className="h-5 w-5" />
               Usage Statistics
             </CardTitle>
             <CardDescription>Track your exam generation usage and quota limits</CardDescription>
@@ -117,7 +227,7 @@ export function SettingsPage() {
             <div>
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <Zap className="h-4 w-4 text-blue-500" />
+                  <Gauge className="h-4 w-4 text-primary" />
                   <span className="font-medium">Today's Usage</span>
                 </div>
                 <span className="text-sm text-muted-foreground">
@@ -126,21 +236,54 @@ export function SettingsPage() {
               </div>
 
               {/* Progress bar */}
-              <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
+              <div className="mb-2 h-2 w-full rounded-full bg-muted">
                 <div
-                  className="bg-blue-500 h-2 rounded-full transition-all"
+                  className="h-2 rounded-full bg-primary transition-all"
                   style={{
-                    width: `${(usageStatus.usage.examsToday / usageStatus.limits.examsPerDay) * 100}%`,
+                    width: `${(usageStatus.usage.examsToday / usageStatus.limits.dailyBurstLimit) * 100}%`,
                   }}
                 />
               </div>
 
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">
-                  {usageStatus.usage.examsToday} / {usageStatus.limits.examsPerDay} exams used
+                  {usageStatus.usage.examsToday} / {usageStatus.limits.dailyBurstLimit} exams used
                 </span>
-                <span className="font-medium text-blue-600">
-                  {usageStatus.limits.examsPerDay - usageStatus.usage.examsToday} remaining
+                <span className="font-medium text-primary">
+                  {Math.max(0, usageStatus.limits.dailyBurstLimit - usageStatus.usage.examsToday)}{' '}
+                  remaining
+                </span>
+              </div>
+            </div>
+
+            {/* Weekly Usage */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <CalendarClock className="h-4 w-4 text-emerald-700" />
+                  <span className="font-medium">This Week</span>
+                </div>
+                <span className="text-sm text-muted-foreground">
+                  Resets in {Math.ceil(usageStatus.resetTimes.weeklyResetIn / (24 * 3600000))} days
+                </span>
+              </div>
+
+              <div className="mb-2 h-2 w-full rounded-full bg-muted">
+                <div
+                  className="h-2 rounded-full bg-emerald-600 transition-all"
+                  style={{
+                    width: `${(usageStatus.usage.examsThisWeek / usageStatus.limits.examsPerWeek) * 100}%`,
+                  }}
+                />
+              </div>
+
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">
+                  {usageStatus.usage.examsThisWeek} / {usageStatus.limits.examsPerWeek} exams used
+                </span>
+                <span className="font-medium text-emerald-700">
+                  {Math.max(0, usageStatus.limits.examsPerWeek - usageStatus.usage.examsThisWeek)}{' '}
+                  remaining
                 </span>
               </div>
             </div>
@@ -149,16 +292,16 @@ export function SettingsPage() {
             <div>
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-purple-500" />
+                  <CalendarClock className="h-4 w-4 text-cyan-700" />
                   <span className="font-medium">This Month</span>
                 </div>
                 <span className="text-sm text-muted-foreground">Resets on the 1st</span>
               </div>
 
               {/* Progress bar */}
-              <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
+              <div className="mb-2 h-2 w-full rounded-full bg-muted">
                 <div
-                  className="bg-purple-500 h-2 rounded-full transition-all"
+                  className="h-2 rounded-full bg-cyan-600 transition-all"
                   style={{
                     width: `${(usageStatus.usage.examsThisMonth / usageStatus.limits.examsPerMonth) * 100}%`,
                   }}
@@ -169,7 +312,7 @@ export function SettingsPage() {
                 <span className="text-muted-foreground">
                   {usageStatus.usage.examsThisMonth} / {usageStatus.limits.examsPerMonth} exams used
                 </span>
-                <span className="font-medium text-purple-600">
+                <span className="font-medium text-cyan-700">
                   {usageStatus.limits.examsPerMonth - usageStatus.usage.examsThisMonth} remaining
                 </span>
               </div>

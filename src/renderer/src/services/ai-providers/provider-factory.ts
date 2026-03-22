@@ -15,7 +15,6 @@
  */
 
 import type { AIProviderType, IAIProvider } from '../../types/ai-providers'
-import { GeminiProvider } from './gemini-provider'
 import { OpenAIProvider } from './openai-provider'
 
 /**
@@ -47,24 +46,15 @@ export class AIProviderFactory {
     let provider: IAIProvider
 
     switch (type) {
-      case 'gemini':
-        provider = new GeminiProvider()
-        break
-
       case 'openai':
         provider = new OpenAIProvider()
         break
 
+      case 'gemini':
       case 'anthropic':
-        // TODO: Implement Anthropic provider
-        throw new Error('Anthropic provider not yet implemented')
-
       case 'ollama':
-        // TODO: Implement Ollama provider
-        throw new Error('Ollama provider not yet implemented')
-
       default:
-        throw new Error(`Unsupported provider type: ${type}`)
+        throw new Error(`Provider type '${type}' is not supported. Exam generation uses the Together AI backend.`)
     }
 
     // Cache the instance
@@ -79,7 +69,7 @@ export class AIProviderFactory {
    * Useful for UI rendering (dropdowns, radio buttons, etc.)
    */
   static getAvailableProviders(): AIProviderType[] {
-    return ['gemini', 'openai'] // Add 'anthropic', 'ollama' when implemented
+    return ['openai'] // Note: exam generation now uses Together AI backend via IPC
   }
 
   /**

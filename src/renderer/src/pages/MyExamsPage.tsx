@@ -20,10 +20,10 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { 
-  FileText, 
-  Search, 
-  Calendar, 
+import {
+  FileText,
+  Search,
+  Calendar,
   Download,
   Trash2,
   Clock,
@@ -31,7 +31,7 @@ import {
   Plus,
   SortDesc,
   ChevronLeft,
-  ChevronRight 
+  ChevronRight,
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
@@ -50,7 +50,6 @@ interface ExamRecord {
   file_path: string
   created_at: string
 }
-
 
 /**
  * Paginated Exam History Response Type
@@ -75,7 +74,7 @@ export function MyExamsPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [sortBy, setSortBy] = useState<'date' | 'title' | 'questions'>('date')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
-  
+
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
@@ -85,46 +84,58 @@ export function MyExamsPage() {
   /**
    * Load exam history with pagination (performance optimized)
    */
-  const loadExamHistory = useCallback(async (page = 1) => {
-    if (!sessionToken) {
-      setError('Not authenticated')
-      setIsLoading(false)
-      return
-    }
-
-    try {
-      setIsLoading(true)
-      setError(null)
-
-      // Use optimized paginated query
-      const response = await window.electron.getExamHistoryPaginated(sessionToken, page, pageSize) as PaginatedExamHistoryResponse
-
-      if (response.success && response.exams) {
-        setExams(response.exams)
-        setCurrentPage(response.currentPage || page)
-        setTotalPages(response.totalPages || 1)
-        setTotalCount(response.totalCount || 0)
-        console.log(`[MyExamsPage] Loaded page ${page}: ${response.exams.length} exams, total: ${response.totalCount}`)
-      } else {
-        setError(response.error || 'Failed to load exam history')
+  const loadExamHistory = useCallback(
+    async (page = 1) => {
+      if (!sessionToken) {
+        setError('Not authenticated')
+        setIsLoading(false)
+        return
       }
-    } catch (err) {
-      setError('Failed to load exam history')
-      console.error('Load exam history error:', err)
-    } finally {
-      setIsLoading(false)
-    }
-  }, [sessionToken, pageSize])
+
+      try {
+        setIsLoading(true)
+        setError(null)
+
+        // Use optimized paginated query
+        const response = (await window.electron.getExamHistoryPaginated(
+          sessionToken,
+          page,
+          pageSize
+        )) as PaginatedExamHistoryResponse
+
+        if (response.success && response.exams) {
+          setExams(response.exams)
+          setCurrentPage(response.currentPage || page)
+          setTotalPages(response.totalPages || 1)
+          setTotalCount(response.totalCount || 0)
+          console.log(
+            `[MyExamsPage] Loaded page ${page}: ${response.exams.length} exams, total: ${response.totalCount}`
+          )
+        } else {
+          setError(response.error || 'Failed to load exam history')
+        }
+      } catch (err) {
+        setError('Failed to load exam history')
+        console.error('Load exam history error:', err)
+      } finally {
+        setIsLoading(false)
+      }
+    },
+    [sessionToken, pageSize]
+  )
 
   /**
    * Handle page change
    */
-  const handlePageChange = useCallback((newPage: number) => {
-    if (newPage >= 1 && newPage <= totalPages && newPage !== currentPage) {
-      setCurrentPage(newPage)
-      loadExamHistory(newPage)
-    }
-  }, [loadExamHistory, totalPages, currentPage])
+  const handlePageChange = useCallback(
+    (newPage: number) => {
+      if (newPage >= 1 && newPage <= totalPages && newPage !== currentPage) {
+        setCurrentPage(newPage)
+        loadExamHistory(newPage)
+      }
+    },
+    [loadExamHistory, totalPages, currentPage]
+  )
 
   // Load exam history on mount
   useEffect(() => {
@@ -138,16 +149,15 @@ export function MyExamsPage() {
     // Apply search filter
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase()
-      filtered = filtered.filter(exam => 
-        exam.title.toLowerCase().includes(term) ||
-        exam.topic.toLowerCase().includes(term)
+      filtered = filtered.filter(
+        exam => exam.title.toLowerCase().includes(term) || exam.topic.toLowerCase().includes(term)
       )
     }
 
     // Apply sorting
     filtered.sort((a, b) => {
       let comparison = 0
-      
+
       switch (sortBy) {
         case 'date':
           comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
@@ -159,7 +169,7 @@ export function MyExamsPage() {
           comparison = a.total_questions - b.total_questions
           break
       }
-      
+
       return sortOrder === 'asc' ? comparison : -comparison
     })
 
@@ -196,7 +206,7 @@ export function MyExamsPage() {
     if (!confirm('Are you sure you want to delete this exam from your history?')) {
       return
     }
-    
+
     // TODO: Implement exam deletion
     console.log('Delete exam:', examId)
     // Remove from database and update UI
@@ -246,14 +256,15 @@ export function MyExamsPage() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="page-shell">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">My Exams</h1>
+          <h1 className="text-3xl font-extrabold">My Exams</h1>
           <p className="text-muted-foreground">
             {totalCount} exam{totalCount !== 1 ? 's' : ''} generated total
-            {totalCount > pageSize && ` • Showing ${exams.length} on page ${currentPage} of ${totalPages}`}
+            {totalCount > pageSize &&
+              ` • Showing ${exams.length} on page ${currentPage} of ${totalPages}`}
           </p>
         </div>
         <Link to="/create-exam">
@@ -266,12 +277,10 @@ export function MyExamsPage() {
 
       {/* Empty state */}
       {totalCount === 0 ? (
-        <div className="text-center py-12">
+        <div className="py-12 text-center">
           <FileText className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
           <h3 className="text-lg font-semibold mb-2">No exams yet</h3>
-          <p className="text-muted-foreground mb-6">
-            Create your first exam to see it appear here
-          </p>
+          <p className="text-muted-foreground mb-6">Create your first exam to see it appear here</p>
           <Link to="/create-exam">
             <Button size="lg">
               <Plus className="h-4 w-4 mr-2" />
@@ -284,15 +293,15 @@ export function MyExamsPage() {
           {/* Search and Filters */}
           <Card>
             <CardContent className="p-4">
-              <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex flex-col gap-4 md:flex-row">
                 {/* Search */}
                 <div className="flex-1">
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform text-muted-foreground" />
                     <Input
                       placeholder="Search exams by title or topic..."
                       value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
+                      onChange={e => setSearchTerm(e.target.value)}
                       className="pl-10"
                     />
                   </div>
@@ -308,7 +317,9 @@ export function MyExamsPage() {
                     <Calendar className="h-4 w-4 mr-1" />
                     Date
                     {sortBy === 'date' && (
-                      <SortDesc className={`h-4 w-4 ml-1 ${sortOrder === 'asc' ? 'rotate-180' : ''}`} />
+                      <SortDesc
+                        className={`h-4 w-4 ml-1 ${sortOrder === 'asc' ? 'rotate-180' : ''}`}
+                      />
                     )}
                   </Button>
                   <Button
@@ -319,7 +330,9 @@ export function MyExamsPage() {
                     <FileText className="h-4 w-4 mr-1" />
                     Title
                     {sortBy === 'title' && (
-                      <SortDesc className={`h-4 w-4 ml-1 ${sortOrder === 'asc' ? 'rotate-180' : ''}`} />
+                      <SortDesc
+                        className={`h-4 w-4 ml-1 ${sortOrder === 'asc' ? 'rotate-180' : ''}`}
+                      />
                     )}
                   </Button>
                   <Button
@@ -330,7 +343,9 @@ export function MyExamsPage() {
                     <Hash className="h-4 w-4 mr-1" />
                     Questions
                     {sortBy === 'questions' && (
-                      <SortDesc className={`h-4 w-4 ml-1 ${sortOrder === 'asc' ? 'rotate-180' : ''}`} />
+                      <SortDesc
+                        className={`h-4 w-4 ml-1 ${sortOrder === 'asc' ? 'rotate-180' : ''}`}
+                      />
                     )}
                   </Button>
                 </div>
@@ -339,7 +354,8 @@ export function MyExamsPage() {
               {/* Results count */}
               {searchTerm && (
                 <p className="text-sm text-muted-foreground mt-2">
-                  {filteredExams.length} result{filteredExams.length !== 1 ? 's' : ''} for "{searchTerm}"
+                  {filteredExams.length} result{filteredExams.length !== 1 ? 's' : ''} for "
+                  {searchTerm}"
                 </p>
               )}
             </CardContent>
@@ -347,19 +363,18 @@ export function MyExamsPage() {
 
           {/* Exam List */}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {filteredExams.map((exam) => (
-              <Card key={exam.id} className="hover:shadow-md transition-shadow">
+            {filteredExams.map(exam => (
+              <Card
+                key={exam.id}
+                className="border-border/80 bg-card/90 transition-all hover:-translate-y-0.5 hover:shadow-md"
+              >
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div className="space-y-1">
-                      <CardTitle className="text-lg line-clamp-2">
-                        {exam.title}
-                      </CardTitle>
-                      <CardDescription className="line-clamp-1">
-                        {exam.topic}
-                      </CardDescription>
+                      <CardTitle className="text-lg line-clamp-2">{exam.title}</CardTitle>
+                      <CardDescription className="line-clamp-1">{exam.topic}</CardDescription>
                     </div>
-                    <FileText className="h-5 w-5 text-muted-foreground flex-shrink-0 ml-2" />
+                    <FileText className="ml-2 h-5 w-5 flex-shrink-0 text-muted-foreground" />
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -378,20 +393,20 @@ export function MyExamsPage() {
 
                     {/* Actions */}
                     <div className="flex gap-2">
-                      <Button 
-                        size="sm" 
-                        variant="outline" 
+                      <Button
+                        size="sm"
+                        variant="outline"
                         className="flex-1"
                         onClick={() => handleDownload(exam)}
                       >
                         <Download className="h-4 w-4 mr-1" />
                         Download
                       </Button>
-                      <Button 
-                        size="sm" 
+                      <Button
+                        size="sm"
                         variant="outline"
                         onClick={() => handleDelete(exam.id)}
-                        className="text-destructive hover:text-destructive"
+                        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -407,13 +422,8 @@ export function MyExamsPage() {
             <div className="text-center py-12">
               <Search className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-semibold mb-2">No exams found</h3>
-              <p className="text-muted-foreground mb-4">
-                No exams match your search criteria
-              </p>
-              <Button 
-                variant="outline" 
-                onClick={() => setSearchTerm('')}
-              >
+              <p className="text-muted-foreground mb-4">No exams match your search criteria</p>
+              <Button variant="outline" onClick={() => setSearchTerm('')}>
                 Clear Search
               </Button>
             </div>
@@ -504,7 +514,8 @@ export function MyExamsPage() {
           {/* Page Info */}
           {totalCount > 0 && (
             <div className="text-center text-sm text-muted-foreground">
-              Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalCount)} of {totalCount} exams
+              Showing {(currentPage - 1) * pageSize + 1} to{' '}
+              {Math.min(currentPage * pageSize, totalCount)} of {totalCount} exams
             </div>
           )}
         </>

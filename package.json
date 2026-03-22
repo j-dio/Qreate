@@ -26,7 +26,6 @@
   "homepage": "https://github.com/j-dio/Qreate#readme",
   "dependencies": {
     "@berthojoris/mcp-sqlite-server": "^1.1.1",
-    "@google/generative-ai": "^0.24.1",
     "@modelcontextprotocol/server-filesystem": "^2025.8.21",
     "@playwright/mcp": "^0.0.46",
     "@sentry/mcp-server": "^0.23.1",
