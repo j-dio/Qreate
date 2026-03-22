@@ -297,15 +297,26 @@ ${sourceText.slice(0, 80000)}`
 
     const validated = TopicPlanSchema.parse(parsed) as TopicPlan
 
+    // Always sync totalConcepts to the actual array length — the AI sometimes
+    // reports a different number than it actually produced, and Pass 2 reads this field.
+    validated.totalConcepts = validated.concepts.length
+
     // If Pass 1 returned fewer concepts than requested, proportionally redistribute types
     if (validated.concepts.length < totalQuestions) {
       this.lastWarning = `Note: The uploaded file did not contain enough distinct information for the requested number of items. The exam has been scaled down to ${validated.concepts.length} questions while maintaining your requested format ratios.`
       this.redistributeConceptTypes(validated.concepts, config)
+      const typeCounts = validated.concepts.reduce(
+        (acc, c) => ({ ...acc, [c.type]: (acc[c.type] ?? 0) + 1 }),
+        {} as Record<string, number>
+      )
+      console.log('[TogetherProvider] Pass 1 redistributed types:', typeCounts)
     }
 
-    // Assign shuffled answer positions for all MCQ concepts (Fisher-Yates chunks)
-    const mcqConcepts = validated.concepts.filter(c => c.type === 'multipleChoice')
-    const positions = this.generateMcqPositions(mcqConcepts.length)
+    // Overwrite ALL answerPosition fields with Fisher-Yates shuffled positions so
+    // Pass 2 receives a balanced, unpredictable distribution regardless of what the AI assigned.
+    const positions = this.generateMcqPositions(
+      validated.concepts.filter(c => c.type === 'multipleChoice').length
+    )
     let posIdx = 0
     validated.concepts = validated.concepts.map(concept => {
       if (concept.type === 'multipleChoice') {
@@ -331,25 +342,57 @@ ${sourceText.slice(0, 80000)}`
 
     const planJson = JSON.stringify(plan, null, 2)
 
+    // Compute explicit type counts from the plan so Pass 2 has an unambiguous target
+    const typeCounts = plan.concepts.reduce(
+      (acc, c) => ({ ...acc, [c.type]: (acc[c.type] ?? 0) + 1 }),
+      {} as Record<string, number>
+    )
+    const typeCountLines = [
+      ['multipleChoice', 'Multiple Choice'],
+      ['trueFalse', 'True or False'],
+      ['fillInTheBlanks', 'Fill in the Blanks'],
+      ['shortAnswer', 'Short Answer'],
+    ]
+      .filter(([key]) => (typeCounts[key] ?? 0) > 0)
+      .map(([key, label]) => `  - ${label}: ${typeCounts[key]} question(s)`)
+      .join('\n')
+
     const systemPrompt =
-      "You are an expert exam question writer. Generate exactly one question per concept in the provided plan. Follow the assigned question type, difficulty, and Bloom's taxonomy level exactly for each concept."
+      "You are an expert exam question writer. Generate exactly one question per concept in the provided plan. You must follow the assigned 'type' and 'answerPosition' fields for every concept without exception."
 
-    const userPrompt = `Generate exam questions based on the topic plan below. Follow these rules STRICTLY:
+    const userPrompt = `Generate exam questions from the topic plan below. Every rule below is MANDATORY.
 
-RULES:
-- Write EXACTLY one question per concept in the plan (${plan.totalConcepts} questions total).
-- Base every question ONLY on the source material. Do NOT use "All of the above" as an option.
-- Do NOT repeat any concept. Each question must test a distinct idea.
-- For Multiple Choice: use the EXACT answerPosition from the plan for the correct answer.
-- For True/False: state a clear, unambiguous fact from the material.
-- For Fill-in-the-Blanks: use "___" for the blank. Keep blanks to key terms only.
-- For Short Answer: require 2-4 sentence responses that apply or analyze content.
-- CRITICAL FORMATTING RULE: Group ALL questions of the same type together under ONE section header. Write the section header ONCE at the top of that group. Do NOT repeat the section header (e.g., "Multiple Choice:") before each individual question.
-- CRITICAL NUMBERING RULE: Number every question sequentially from 1 to ${plan.totalConcepts} from the top of the exam to the bottom. Completely ignore the original "id" field from the JSON plan — it is for internal planning only and must NOT appear in the output.
-- The Answer Key MUST use this same sequential numbering (e.g., "1. A", "2. True"). Do NOT put the Answer Key in a markdown table — use a plain text list only.
+REQUIRED QUESTION COUNTS (derived from the plan — match these exactly):
+${typeCountLines}
+
+MANDATORY RULES:
+
+1. QUESTION COUNT: Write exactly ${plan.concepts.length} questions total — one per concept in the plan.
+
+2. QUESTION TYPE PER CONCEPT: Every concept in the plan has a "type" field. You MUST write that exact question type for that concept:
+   - "multipleChoice"  → Write a 4-option multiple choice question (options A, B, C, D).
+   - "trueFalse"       → Write a true/false statement.
+   - "fillInTheBlanks" → Write a sentence with "___" marking the blank.
+   - "shortAnswer"     → Write an open-ended question requiring a 2-4 sentence response.
+   Do NOT change a concept's type. Do NOT write more or fewer of any type than the counts above.
+
+3. ANSWER PLACEMENT FOR MULTIPLE CHOICE: Every multiple choice concept in the plan has an "answerPosition" field set to "A", "B", "C", or "D". This field tells you exactly which option letter MUST contain the correct answer.
+   - answerPosition "A" → Option A is correct; B, C, D are wrong distractors.
+   - answerPosition "B" → Option B is correct; A, C, D are wrong distractors.
+   - answerPosition "C" → Option C is correct; A, B, D are wrong distractors.
+   - answerPosition "D" → Option D is correct; A, B, C are wrong distractors.
+   You MUST honor every answerPosition exactly. Never put the correct answer at a different letter.
+
+4. CONTENT: Base every question ONLY on the source material. Do NOT use "All of the above" as an option. Do NOT repeat concepts.
+
+5. GROUPING: Group ALL questions of the same type under ONE section header. Write each header exactly once.
+
+6. NUMBERING: Number every question sequentially from 1 to ${plan.concepts.length} top-to-bottom. Ignore the "id" field in the plan — it is internal only.
+
+7. ANSWER KEY: List every answer using the sequential question number (e.g., "1. A", "2. True"). Plain text list only — no markdown table.
 
 OUTPUT FORMAT:
-General Topic: [extracted topic]
+General Topic: [topic]
 
 Multiple Choice:
 1. [Question text]
@@ -359,16 +402,16 @@ C) [Option C]
 D) [Option D]
 
 True or False:
-N. [Statement text]
+N. [Statement]
 
 Fill in the Blanks:
 N. [Sentence with ___ for blank]
 
 Short Answer:
-N. [Question requiring explanation]
+N. [Open-ended question]
 
 ----Answer Key----
-[Number]. [Answer]
+1. [Answer]
 ...
 
 TOPIC PLAN:
