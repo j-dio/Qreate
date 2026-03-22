@@ -93,8 +93,10 @@ export class TogetherProvider {
   // ----------------------------------------------------------
 
   async testConnection(): Promise<{ success: boolean; message: string; details?: string }> {
-    console.log('[TogetherProvider] Testing primary connection...',
-      { model: this.primaryModel, hasFallback: !!this.fallbackClient })
+    console.log('[TogetherProvider] Testing primary connection...', {
+      model: this.primaryModel,
+      hasFallback: !!this.fallbackClient,
+    })
 
     try {
       await this.primaryClient.chat.completions.create({
@@ -183,7 +185,9 @@ export class TogetherProvider {
     // --- Pass 1: Topic Extraction and Question Plan ---
     let plan: TopicPlan
     try {
-      plan = await this.callWithFallback(client => this.extractTopicPlan(client, cappedConfig, sourceText))
+      plan = await this.callWithFallback(client =>
+        this.extractTopicPlan(client, cappedConfig, sourceText)
+      )
       this.lastActualQuestions = plan.concepts.length
     } catch (error: any) {
       throw new Error(`Pass 1 (topic planning) failed: ${error.message}`)
@@ -314,7 +318,7 @@ ${sourceText.slice(0, 80000)}`
     const planJson = JSON.stringify(plan, null, 2)
 
     const systemPrompt =
-      'You are an expert exam question writer. Generate exactly one question per concept in the provided plan. Follow the assigned question type, difficulty, and Bloom\'s taxonomy level exactly for each concept.'
+      "You are an expert exam question writer. Generate exactly one question per concept in the provided plan. Follow the assigned question type, difficulty, and Bloom's taxonomy level exactly for each concept."
 
     const userPrompt = `Generate exam questions based on the topic plan below. Follow these rules STRICTLY:
 
@@ -398,7 +402,7 @@ ${sourceText.slice(0, 80000)}`
         const result = await fn(this.primaryClient)
         this.lastUsedProvider = 'Together AI'
         return result
-      } catch (error: any) {
+      } catch {
         if (attempt < maxRetries) {
           const delay = baseDelay * Math.pow(2, attempt)
           await new Promise(resolve => setTimeout(resolve, delay))
@@ -426,7 +430,9 @@ ${sourceText.slice(0, 80000)}`
       }
     }
 
-    throw new Error('Together AI primary provider exhausted all retries and no fallback is configured')
+    throw new Error(
+      'Together AI primary provider exhausted all retries and no fallback is configured'
+    )
   }
 
   // ----------------------------------------------------------
