@@ -79,7 +79,7 @@ function App() {
       if (sessionToken && !user) {
         try {
           const result = await window.electron.auth.validateSession(sessionToken)
-          
+
           if (result.success && result.valid && result.user) {
             // Session is valid - restore user data
             setUserAndSession(
@@ -105,7 +105,7 @@ function App() {
           logout()
         }
       }
-      
+
       setIsInitializing(false)
     }
 
@@ -117,7 +117,12 @@ function App() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-center">
-          <div className="mb-4 text-2xl font-bold">Qreate</div>
+          <img
+            src="/qreate-logo.png"
+            alt="Qreate logo"
+            className="mx-auto mb-4 h-16 w-16 rounded-2xl border border-border/70 bg-white object-cover"
+          />
+          <div className="mb-2 text-2xl font-bold">Qreate</div>
           <div className="text-muted-foreground">Loading...</div>
         </div>
       </div>

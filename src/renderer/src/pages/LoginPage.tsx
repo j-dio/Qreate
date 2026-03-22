@@ -12,7 +12,6 @@
 
 import { useState, FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { GraduationCap } from 'lucide-react'
 import { Input } from '../components/ui/Input'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
@@ -91,9 +90,11 @@ export function LoginPage() {
         {/* Logo and Title */}
         <div className="flex flex-col items-center space-y-2">
           <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-primary/15 p-2.5 text-primary">
-              <GraduationCap className="h-6 w-6" />
-            </div>
+            <img
+              src="/qreate-logo.png"
+              alt="Qreate logo"
+              className="h-11 w-11 rounded-xl border border-border/70 bg-white object-cover"
+            />
             <h1 className="text-3xl font-extrabold">Qreate</h1>
           </div>
           <p className="text-sm text-muted-foreground">AI-powered exam generation</p>
