@@ -379,7 +379,9 @@ MANDATORY RULES:
 
 6. NUMBERING: Number every question sequentially from 1 to ${plan.concepts.length} top-to-bottom. Ignore the "id" field in the plan — it is internal only.
 
-7. ANSWER KEY: List every answer using the sequential question number (e.g., "1. A", "2. True"). Plain text list only — no markdown table.
+7. CRITICAL FORMATTING: NEVER place the answers immediately after the questions in the main body. The question sections must contain ONLY the questions and the multiple choice options. ALL answers must be strictly hidden and reserved ONLY for the ----Answer Key---- section at the very bottom.
+
+8. ANSWER KEY: List every answer using the sequential question number (e.g., "1. A", "2. True"). Plain text list only — no markdown table.
 
 OUTPUT FORMAT:
 General Topic: [topic]
