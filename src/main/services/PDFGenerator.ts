@@ -127,12 +127,109 @@ export class PDFGenerator {
    * @param examData - Raw exam data from Groq
    * @returns HTML string
    */
+  /**
+   * Renumber questions sequentially in display order.
+   *
+   * The AI assigns concept IDs globally across all question types, so questions
+   * within each type-section end up with non-sequential numbers (e.g., MC gets
+   * 1, 7, 12… and T/F gets 3, 4, 5…). This post-processor walks the exam body
+   * in display order, builds an old→new mapping, renumbers every question line,
+   * and rebuilds the answer key to match — without touching any question text,
+   * options, or answer content.
+   *
+   * Ghost answers (answer-key entries with no corresponding question body) are
+   * silently dropped so the key stays consistent with what is actually printed.
+   */
+  private renumberContent(content: string): string {
+    // Locate the answer key delimiter
+    const delimiterRegex = /\n(----+\s*Answer Key\s*----+)\s*\n/i
+    const delimMatch = content.match(delimiterRegex)
+
+    if (!delimMatch || delimMatch.index === undefined) {
+      return content // No recognisable answer key — return as-is
+    }
+
+    const examBody = content.slice(0, delimMatch.index)
+    const answerKeyRaw = content.slice(delimMatch.index + delimMatch[0].length)
+    const delimStr = delimMatch[1]
+
+    // Walk exam body lines in display order, collect question numbers as seen
+    const oldToNew = new Map<number, number>()
+    let displayCounter = 0
+    for (const line of examBody.split('\n')) {
+      const m = line.match(/^(\d+)\.\s+\S/)
+      if (m) {
+        const oldNum = parseInt(m[1], 10)
+        if (!oldToNew.has(oldNum)) {
+          displayCounter++
+          oldToNew.set(oldNum, displayCounter)
+        }
+      }
+    }
+
+    // If numbering is already sequential, nothing to do
+    let alreadySequential = true
+    let expected = 1
+    for (const [oldNum, newNum] of oldToNew) {
+      if (oldNum !== newNum || newNum !== expected) {
+        alreadySequential = false
+        break
+      }
+      expected++
+    }
+    if (alreadySequential) return content
+
+    // Renumber question lines in exam body (only lines in oldToNew are affected)
+    const renumberedBody = examBody.replace(/^(\d+)(\.\s)/gm, (match, numStr, rest) => {
+      const oldNum = parseInt(numStr, 10)
+      const newNum = oldToNew.get(oldNum)
+      return newNum !== undefined ? `${newNum}${rest}` : match
+    })
+
+    // Parse answer key: collect each numbered entry (handles multi-line answers)
+    const answerEntries = new Map<number, string>()
+    let currentAKNum: number | null = null
+    const currentAKLines: string[] = []
+
+    for (const line of answerKeyRaw.split('\n')) {
+      const m = line.match(/^(\d+)\.\s+(.+)/)
+      if (m) {
+        if (currentAKNum !== null && currentAKLines.length > 0) {
+          answerEntries.set(currentAKNum, currentAKLines.join('\n'))
+          currentAKLines.length = 0
+        }
+        currentAKNum = parseInt(m[1], 10)
+        currentAKLines.push(m[2])
+      } else if (currentAKNum !== null && line.trim()) {
+        currentAKLines.push(line) // continuation of long answer
+      }
+    }
+    if (currentAKNum !== null && currentAKLines.length > 0) {
+      answerEntries.set(currentAKNum, currentAKLines.join('\n'))
+    }
+
+    // Rebuild answer key in new display order; drop ghost entries (no matching question body)
+    const sortedEntries = Array.from(oldToNew.entries()).sort((a, b) => a[1] - b[1])
+    const newAnswerLines: string[] = []
+    for (const [oldNum, newNum] of sortedEntries) {
+      const answer = answerEntries.get(oldNum)
+      if (answer !== undefined) {
+        newAnswerLines.push(`${newNum}. ${answer}`)
+      }
+    }
+
+    return renumberedBody + '\n' + delimStr + '\n' + newAnswerLines.join('\n')
+  }
+
   private formatGroqExamAsHTML(examData: any): string {
     const { content, totalQuestions, metadata } = examData
-    
+
+    // Normalise question numbering to sequential display order before rendering
+    const normalisedContent = this.renumberContent(content)
+
     // Extract topic from content (first line after "General Topic:")
     let topic = 'Generated Exam'
-    const topicMatch = content.match(/General Topic:\s*(.+?)(?:\n|----)/i)
+    const topicMatch = normalisedContent.match(/General Topic:\s*(.+?)(?:\n|----)/i)
     if (topicMatch) {
       topic = topicMatch[1].trim()
     }
@@ -196,7 +293,7 @@ export class PDFGenerator {
   </div>
   
   <div class="content">
-${content}
+${normalisedContent}
   </div>
 
   <div class="footer">
