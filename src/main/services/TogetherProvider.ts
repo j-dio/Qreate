@@ -44,6 +44,25 @@ export interface ExamGenerationConfig {
 }
 
 // ============================================================
+// Validation primitives
+// ============================================================
+
+class ValidationError extends Error {
+  constructor(
+    message: string,
+    public readonly details: string[]
+  ) {
+    super(message)
+    this.name = 'ValidationError'
+  }
+}
+
+interface Pass2ValidationResult {
+  valid: boolean
+  violations: string[]
+}
+
+// ============================================================
 // Zod schemas — validate Pass 1 JSON output before Pass 2
 // ============================================================
 
@@ -73,6 +92,7 @@ export class TogetherProvider {
   private fallbackModel = 'llama-3.3-70b-versatile'
   private lastUsedProvider = 'Together AI'
   private lastActualQuestions = 0
+  private lastPlan: TopicPlan | null = null
 
   constructor(togetherApiKey: string, groqApiKey?: string) {
     this.primaryClient = new OpenAI({
@@ -152,6 +172,10 @@ export class TogetherProvider {
     return this.lastActualQuestions
   }
 
+  getLastPlan(): TopicPlan | null {
+    return this.lastPlan
+  }
+
   getModelInfo(): {
     primaryModel: string
     fallbackModel: string
@@ -191,16 +215,15 @@ export class TogetherProvider {
       plan = await this.callWithFallback(client =>
         this.extractTopicPlan(client, cappedConfig, sourceText)
       )
+      this.lastPlan = plan
       this.lastActualQuestions = plan.concepts.length
     } catch (error: any) {
       throw new Error(`Pass 1 (topic planning) failed: ${error.message}`)
     }
 
-    // --- Pass 2: Question Generation from Plan ---
+    // --- Pass 2: Question Generation from Plan (with validation retry) ---
     try {
-      const content = await this.callWithFallback(client =>
-        this.generateFromPlan(client, plan, cappedConfig, sourceText)
-      )
+      const content = await this.generateFromPlanWithRetry(plan, cappedConfig, sourceText)
       return { content }
     } catch (error: any) {
       throw new Error(`Pass 2 (question generation) failed: ${error.message}`)
@@ -240,7 +263,7 @@ export class TogetherProvider {
 
     // Build conditional anti-laziness rules based on which types are enabled
     const mcPriorityRule = config.questionTypes.multipleChoice
-      ? `- CRITICAL: Multiple Choice MUST be the primary question format. If a concept has comparable properties, causes, categories, or characteristics that can form plausible distractors, you MUST assign it as multipleChoice. Do NOT default to trueFalse or fillInTheBlanks just because they are easier to write.`
+      ? `- CRITICAL MULTIPLE CHOICE RULE: Multiple Choice MUST be the most frequent question type in your output. You MUST generate more Multiple Choice concepts than any other type. Do NOT take the easy way out by heavily relying on True/False or Fill-in-the-Blanks.`
       : ''
 
     const enabledTypeCount = Object.values(config.questionTypes).filter(Boolean).length
@@ -249,31 +272,60 @@ export class TogetherProvider {
         ? `- BALANCE: Enforce an even distribution among the allowed types. No single allowed type may represent more than 40% of all concepts unless it is the only type allowed.`
         : ''
 
-    const tfVarianceRule = config.questionTypes.trueFalse
-      ? `- TRUE/FALSE VARIANCE: Exactly 50% of all trueFalse concepts must be statements that are FALSE. When writing a "false" T/F concept, you must rewrite the fact into a plausible but incorrect statement. Do NOT make every T/F statement True.`
-      : ''
-
-    const antiLazinessRules = [mcPriorityRule, balanceRule, tfVarianceRule]
-      .filter(Boolean)
-      .join('\n')
+    const antiLazinessRules = [mcPriorityRule, balanceRule].filter(Boolean).join('\n')
 
     const systemPrompt =
-      'You are an expert educational assessment planner. Output valid JSON only. Do not include markdown or code fences.'
+      'You are an expert educational assessment planner who extracts testable claims from source material. Every concept you extract must be a specific, declarative factual claim directly stated in the source — never a bare topic label. Output valid JSON only. Do not include markdown or code fences.'
 
-    const userPrompt = `Analyze the following source material and extract UP TO ${totalQuestions} unique concepts for a practice exam.
+    // Detect multi-source input and compute per-document concept budgets
+    const sourceSections = this.parseSourceSections(sourceText)
+    let multiSourceBlock = ''
+    if (sourceSections && sourceSections.length >= 2) {
+      const budgets = this.computeSourceBudgets(sourceSections, totalQuestions)
+      const minPerDoc = Math.max(1, Math.min(3, Math.floor(totalQuestions / sourceSections.length)))
+      multiSourceBlock = `
+MULTI-SOURCE DISTRIBUTION (MANDATORY — enforced before any other rule):
+The source material contains ${sourceSections.length} separate documents, each marked by "=== SOURCE N: name ===".
+You MUST extract concepts from EVERY document. Do NOT exhaust the concept limit on the first document.
+Per-document concept targets (extract approximately this many from each):
+${sourceSections.map((s, i) => `  - Source ${i + 1} "${s.name}": ~${budgets[i]} concept(s)`).join('\n')}
+Even if a document is very short, extract at least ${minPerDoc} concept(s) from it.
+`
+    }
+
+    const userPrompt = `Analyze the following source material and extract UP TO ${totalQuestions} unique testable claims for a practice exam.
+
+CRITICAL: WHAT IS A "CONCEPT"?
+A concept is NOT a topic label like "Metastasis" or "Cell Division". A concept IS a specific, testable factual claim that is explicitly stated in the source material.
+
+BAD examples (vague topic labels — NEVER do this):
+  - "Metastasis"
+  - "Cell cycle regulation"
+  - "Types of neoplasia"
+
+GOOD examples (specific declarative claims anchored to source):
+  - "Metastasis to the liver is the most common site for colorectal cancer spread"
+  - "CDK inhibitors like p21 halt the cell cycle at the G1/S checkpoint"
+  - "Benign neoplasms are well-differentiated and encapsulated, while malignant neoplasms show anaplasia and invasion"
+
+Each concept string must be a complete sentence or specific claim that someone could verify by reading the source material. If you cannot point to the specific passage in the source that supports the claim, do not include it.
 
 ALLOWED QUESTION TYPES (assign whichever fits each concept best):
 ${allowedTypeLines}
 
 DIFFICULTY DISTRIBUTION (3-level, scale down proportionally if fewer concepts are available):
 ${diffLines}
-
+${multiSourceBlock}
 REQUIREMENTS:
+- Each concept must be a SPECIFIC FACTUAL CLAIM from the source — a declarative sentence, not a topic name.
 - Each concept must be COMPLETELY DISTINCT — no overlap between concepts.
 - Assign each concept exactly one question type from the ALLOWED list above (choose whichever type best suits that concept), one difficulty level, and one Bloom's taxonomy level.
 - For multipleChoice concepts, assign an "answerPosition" field (A, B, C, or D) cycling evenly to prevent answer bias.
 - Do NOT repeat any concept. Do NOT assign the same topic to multiple questions.
+- Each concept must be unique to its assigned question type. Do NOT plan a concept for trueFalse if the same factual claim already appears under multipleChoice or any other type.
 - Concepts must be extracted ONLY from the source material provided. NEVER invent or add concepts from outside the source material to reach the target count. If the material only supports 15 or 30 distinct concepts, output only that many.
+- For trueFalse concepts: the claim you write here is the TRUE version of the fact. Pass 2 will decide whether to present it as-is (True) or alter a detail to make it False.
+
 ${antiLazinessRules}
 
 OUTPUT FORMAT (JSON only):
@@ -281,8 +333,9 @@ OUTPUT FORMAT (JSON only):
   "topic": "Detected subject/topic from the material",
   "totalConcepts": <actual number of concepts extracted>,
   "concepts": [
-    { "id": 1, "concept": "Specific concept name", "type": "multipleChoice", "difficulty": "moderate", "bloomLevel": "understand", "answerPosition": "A" },
-    { "id": 2, "concept": "Another specific concept", "type": "trueFalse", "difficulty": "easy", "bloomLevel": "remember" },
+    { "id": 1, "concept": "The TNM staging system uses tumor size (T), lymph node involvement (N), and distant metastasis (M) to classify cancer severity", "type": "multipleChoice", "difficulty": "moderate", "bloomLevel": "understand", "answerPosition": "A" },
+    { "id": 2, "concept": "Benign tumors grow by expansion and are typically encapsulated", "type": "trueFalse", "difficulty": "easy", "bloomLevel": "remember" },
+    { "id": 3, "concept": "Anaplasia refers to the lack of cellular differentiation seen in malignant tumors", "type": "fillInTheBlanks", "difficulty": "moderate", "bloomLevel": "remember" },
     ...
   ]
 }
@@ -320,6 +373,9 @@ ${sourceText.slice(0, 80000)}`
     // reports a different number than it actually produced, and Pass 2 reads this field.
     validated.totalConcepts = validated.concepts.length
 
+    // Semantic validation: type allowlist, answerPosition placement, duplicate concepts
+    this.validatePass1Plan(validated, config)
+
     // Overwrite ALL answerPosition fields with Fisher-Yates shuffled positions so
     // Pass 2 receives a balanced, unpredictable distribution regardless of what the AI assigned.
     const positions = this.generateMcqPositions(
@@ -330,10 +386,91 @@ ${sourceText.slice(0, 80000)}`
       if (concept.type === 'multipleChoice') {
         return { ...concept, answerPosition: positions[posIdx++] } as ConceptAssignment
       }
-      return concept
+      // Strip any stray answerPosition from non-MC concepts
+      const { answerPosition: _removed, ...rest } = concept as ConceptAssignment & {
+        answerPosition?: string
+      }
+      void _removed
+      return rest as ConceptAssignment
     })
 
     return validated
+  }
+
+  // ----------------------------------------------------------
+  // Pass 1: Semantic Validator
+  // ----------------------------------------------------------
+
+  private validatePass1Plan(plan: TopicPlan, config: ExamGenerationConfig): void {
+    const violations: string[] = []
+
+    // Build set of enabled types
+    const enabledTypes = new Set(
+      Object.entries(config.questionTypes)
+        .filter(([, enabled]) => enabled)
+        .map(([type]) => type)
+    )
+
+    // 1. Type allowlist check
+    for (const concept of plan.concepts) {
+      if (!enabledTypes.has(concept.type)) {
+        violations.push(
+          `Concept ${concept.id} ("${concept.concept}") has type "${concept.type}" which is not in enabled types: [${[...enabledTypes].join(', ')}]`
+        )
+      }
+    }
+
+    // 2. answerPosition only on MC
+    for (const concept of plan.concepts) {
+      if (concept.type !== 'multipleChoice' && concept.answerPosition !== undefined) {
+        violations.push(
+          `Concept ${concept.id} ("${concept.concept}") has type "${concept.type}" but incorrectly has answerPosition "${concept.answerPosition}"`
+        )
+      }
+    }
+
+    // 3. No duplicate concepts (case-insensitive normalized)
+    const seen = new Map<string, number>()
+    for (const concept of plan.concepts) {
+      const normalized = concept.concept.toLowerCase().trim()
+      if (seen.has(normalized)) {
+        violations.push(
+          `Duplicate concept at id ${concept.id}: "${concept.concept}" duplicates id ${seen.get(normalized)}`
+        )
+      } else {
+        seen.set(normalized, concept.id)
+      }
+    }
+
+    // 4. Cross-type near-duplicate detection
+    // Normalize each concept to a sorted bag of significant words (3+ chars, excluding stop
+    // words) and flag concepts that share the same fingerprint across different question types.
+    const conceptPhrases = new Map<string, number[]>()
+    const stopWords = new Set(['the', 'and', 'for', 'are', 'was', 'that', 'this', 'with', 'from'])
+    for (const concept of plan.concepts) {
+      const words = concept.concept
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, '')
+        .split(/\s+/)
+        .filter(w => w.length >= 3 && !stopWords.has(w))
+      const key = words.sort().join(' ')
+      if (key.length > 0) {
+        const existing = conceptPhrases.get(key) ?? []
+        existing.push(concept.id)
+        conceptPhrases.set(key, existing)
+      }
+    }
+    for (const [phrase, ids] of conceptPhrases) {
+      if (ids.length > 1) {
+        violations.push(
+          `Near-duplicate concepts detected: IDs [${ids.join(', ')}] share key phrase "${phrase}"`
+        )
+      }
+    }
+
+    if (violations.length > 0) {
+      throw new ValidationError('Pass 1 plan failed semantic validation', violations)
+    }
   }
 
   // ----------------------------------------------------------
@@ -350,8 +487,55 @@ ${sourceText.slice(0, 80000)}`
 
     const planJson = JSON.stringify(plan, null, 2)
 
+    // Compute per-type counts from the actual plan
+    const mcCount = plan.concepts.filter(c => c.type === 'multipleChoice').length
+    const tfCount = plan.concepts.filter(c => c.type === 'trueFalse').length
+    const fitbCount = plan.concepts.filter(c => c.type === 'fillInTheBlanks').length
+    const saCount = plan.concepts.filter(c => c.type === 'shortAnswer').length
+
+    // T/F targets — nearest split (floor/ceil) to handle odd counts without mutating plan
+    const targetFalseCount = Math.floor(tfCount / 2)
+    const targetTrueCount = tfCount - targetFalseCount
+
+    // Dynamic Rule 2: only include type descriptions for types present in the plan
+    const typeRuleLines: string[] = []
+    if (mcCount > 0)
+      typeRuleLines.push(
+        '   - "multipleChoice"  → Write a 4-option multiple choice question (options A, B, C, D).'
+      )
+    if (tfCount > 0)
+      typeRuleLines.push('   - "trueFalse"       → Write a true/false statement.')
+    if (fitbCount > 0)
+      typeRuleLines.push(
+        '   - "fillInTheBlanks" → Write a sentence with "___" marking the blank. The blank MUST be replaceable with a specific technical term or named concept from the source material. NEVER use a generic word like "another", "some", "it", "important", or the same word being defined in the sentence. The answer must be a concrete, unambiguous noun or proper term.'
+      )
+    if (saCount > 0)
+      typeRuleLines.push(
+        '   - "shortAnswer"     → Write an open-ended question requiring a 2-4 sentence response.'
+      )
+
+    // Dynamic OUTPUT FORMAT: only include section blocks present in the plan
+    const sectionBlocks: string[] = []
+    if (mcCount > 0)
+      sectionBlocks.push(
+        'Multiple Choice:\n1. [Question text]\nA) [Option A]\nB) [Option B]\nC) [Option C]\nD) [Option D]'
+      )
+    if (tfCount > 0) sectionBlocks.push('True or False:\nN. [Statement]')
+    if (fitbCount > 0) sectionBlocks.push('Fill in the Blanks:\nN. [Sentence with ___ for blank]')
+    if (saCount > 0) sectionBlocks.push('Short Answer:\nN. [Open-ended question]')
+
+    const dynamicOutputFormat = [
+      'General Topic: [topic]',
+      '',
+      ...sectionBlocks,
+      '',
+      '----Answer Key----',
+      '1. [Answer]',
+      '...',
+    ].join('\n')
+
     const systemPrompt =
-      "You are an expert exam question writer. Generate exactly one question per concept in the provided plan. You must follow the assigned 'type' and 'answerPosition' fields for every concept without exception."
+      "You are an expert exam question writer who creates challenging, realistic assessments. For multiple choice: every distractor must be a plausible answer that a student who partially studied might choose — never use obviously wrong or vague filler options. For true/false: you MUST produce a mix of True and False statements — approximately half should be False, created by altering one specific detail of a true fact. Follow the assigned 'type' and 'answerPosition' fields for every concept without exception."
 
     const userPrompt = `Generate exam questions from the topic plan below. Every rule below is MANDATORY.
 
@@ -360,51 +544,60 @@ MANDATORY RULES:
 1. QUESTION COUNT: Write exactly ${plan.concepts.length} questions total — one per concept in the plan.
 
 2. QUESTION TYPE PER CONCEPT: Every concept in the plan has a "type" field. Write the question type specified in that field:
-   - "multipleChoice"  → Write a 4-option multiple choice question (options A, B, C, D).
-   - "trueFalse"       → Write a true/false statement.
-   - "fillInTheBlanks" → Write a sentence with "___" marking the blank.
-   - "shortAnswer"     → Write an open-ended question requiring a 2-4 sentence response.
+${typeRuleLines.join('\n')}
    Do NOT change a concept's type.
 
-3. ANSWER PLACEMENT FOR MULTIPLE CHOICE: Every multiple choice concept in the plan has an "answerPosition" field set to "A", "B", "C", or "D". This field tells you exactly which option letter MUST contain the correct answer.
+3. TRUE/FALSE VARIANCE (CRITICAL — generation will be REJECTED if violated):
+${
+  tfCount > 0
+    ? `   BEFORE writing any T/F questions, you must first plan which ones will be False.
+   Out of ${tfCount} T/F questions, exactly ${targetFalseCount} MUST be False and ${targetTrueCount} MUST be True.
+
+   STEP-BY-STEP PROCESS FOR T/F:
+   a) Look at all ${tfCount} trueFalse concepts in the plan. Each concept contains a TRUE factual claim from the source.
+   b) Select exactly ${targetFalseCount} of those concepts to convert into FALSE statements.
+   c) For each selected False concept: take the true claim and change exactly ONE specific detail to make it factually wrong.
+      - Change a number, a name, a location, a process name, or a cause-effect relationship.
+      - The alteration must be subtle enough that a student who didn't study would believe it.
+      - Example: True claim "CDK inhibitors halt the cell cycle at G1/S" → False statement: "CDK inhibitors halt the cell cycle at the G2/M checkpoint" (changed which checkpoint).
+   d) For the remaining ${targetTrueCount} concepts: present the true claim as a clear, direct statement. Answer: True.
+   e) The validator WILL reject your output if fewer than ${Math.max(1, Math.floor(tfCount * 0.1))} of either polarity exist.
+
+   COMMON MISTAKE TO AVOID: Do NOT write all statements as true facts and mark them all "True". You MUST deliberately introduce factual errors into exactly ${targetFalseCount} statements.`
+    : '   This plan contains 0 trueFalse questions. Do not create any trueFalse items.'
+}
+
+4. ANSWER PLACEMENT FOR MULTIPLE CHOICE: Every multiple choice concept in the plan has an "answerPosition" field set to "A", "B", "C", or "D". This field tells you exactly which option letter MUST contain the correct answer.
    - answerPosition "A" → Option A is correct; B, C, D are wrong distractors.
    - answerPosition "B" → Option B is correct; A, C, D are wrong distractors.
    - answerPosition "C" → Option C is correct; A, B, D are wrong distractors.
    - answerPosition "D" → Option D is correct; A, B, C are wrong distractors.
    You MUST honor every answerPosition exactly. Never put the correct answer at a different letter.
 
-4. CONTENT: Base every question ONLY on the source material. Do NOT use "All of the above" as an option. Do NOT repeat concepts.
+5. MULTIPLE CHOICE DISTRACTOR QUALITY (CRITICAL):
+   Every distractor (wrong option) must be:
+   - A real term, concept, or value from the same domain that a partially-prepared student might confuse with the correct answer.
+   - Similar in length, specificity, and grammatical structure to the correct answer.
+   - NEVER use vague fillers like "None of the above", "All of the above", "Some cells", or "Various factors".
+   - NEVER make distractors obviously wrong through vague language while the correct answer uses precise terminology.
+   - Each distractor should represent a common misconception or a plausible alternative from the source material.
+   Example — GOOD distractors for "Which phase involves DNA replication?" (answer: S phase):
+     A) G1 phase  B) S phase  C) G2 phase  D) M phase  ← all are real cell cycle phases
+   Example — BAD distractors:
+     A) Some phase  B) S phase  C) The dividing part  D) None of these  ← vague, obviously wrong
 
-5. GROUPING: Group ALL questions of the same type under ONE section header. Write each header exactly once.
+6. CONTENT: Base every question ONLY on the source material. Do NOT repeat concepts.
 
-6. NUMBERING: Number every question sequentially from 1 to ${plan.concepts.length} top-to-bottom. Ignore the "id" field in the plan — it is internal only.
+7. GROUPING: Group ALL questions of the same type under ONE section header. Write each header exactly once.
 
-7. CRITICAL FORMATTING: NEVER place the answers immediately after the questions in the main body. The question sections must contain ONLY the questions and the multiple choice options. ALL answers must be strictly hidden and reserved ONLY for the ----Answer Key---- section at the very bottom.
+8. NUMBERING: Number every question sequentially from 1 to ${plan.concepts.length} top-to-bottom. Ignore the "id" field in the plan — it is internal only.
 
-8. ANSWER KEY: List every answer using the sequential question number (e.g., "1. A", "2. True"). Plain text list only — no markdown table.
+9. CRITICAL FORMATTING: NEVER place the answers immediately after the questions in the main body. The question sections must contain ONLY the questions and the multiple choice options. ALL answers must be strictly hidden and reserved ONLY for the ----Answer Key---- section at the very bottom.
+
+10. ANSWER KEY: List every answer using the sequential question number (e.g., "1. A", "2. True"). Plain text list only — no markdown table.
 
 OUTPUT FORMAT:
-General Topic: [topic]
-
-Multiple Choice:
-1. [Question text]
-A) [Option A]
-B) [Option B]
-C) [Option C]
-D) [Option D]
-
-True or False:
-N. [Statement]
-
-Fill in the Blanks:
-N. [Sentence with ___ for blank]
-
-Short Answer:
-N. [Open-ended question]
-
-----Answer Key----
-1. [Answer]
-...
+${dynamicOutputFormat}
 
 TOPIC PLAN:
 ${planJson}
@@ -429,6 +622,71 @@ ${sourceText.slice(0, 80000)}`
     }
 
     return content
+  }
+
+  // ----------------------------------------------------------
+  // Pass 2: Retry Orchestration with Validation (hard-fail on exhaustion)
+  // ----------------------------------------------------------
+
+  private async generateFromPlanWithRetry(
+    plan: TopicPlan,
+    config: ExamGenerationConfig,
+    sourceText: string
+  ): Promise<string> {
+    const tfCount = plan.concepts.filter(c => c.type === 'trueFalse').length
+    const targetFalseCount = Math.floor(tfCount / 2)
+    const targetTrueCount = tfCount - targetFalseCount
+
+    const attemptsLog: Array<{ client: string; attempt: number; violations: string[] }> = []
+    const clients: Array<{ client: OpenAI; name: string }> = [
+      { client: this.primaryClient, name: 'Together AI' },
+    ]
+    if (this.fallbackClient) {
+      clients.push({ client: this.fallbackClient, name: 'Groq AI' })
+    }
+
+    for (const { client, name } of clients) {
+      for (let attempt = 0; attempt <= 2; attempt++) {
+        try {
+          const raw = await this.generateFromPlan(client, plan, config, sourceText)
+          // NOTE: fixMCAnswerKeys is disabled. The original assumption — that the model
+          // reliably places answers at the instructed answerPosition but writes the wrong
+          // letter in the key — was proven false. In practice the model ignores
+          // answerPosition ~40% of the time, placing the correct answer wherever it wants
+          // but writing the CORRECT letter in its own answer key. Overwriting the key with
+          // answerPosition then points to the WRONG option, corrupting ~40% of MC answers.
+          // The model's own answer key is more reliable than the forced override.
+          const result = validatePass2OutputStandalone(
+            raw,
+            plan,
+            targetTrueCount,
+            targetFalseCount
+          )
+          attemptsLog.push({ client: name, attempt, violations: result.violations })
+          if (result.valid) {
+            this.lastUsedProvider = name
+            return raw
+          }
+          console.error(
+            `[TogetherProvider] Pass 2 attempt ${attempt + 1} (${name}) failed validation:`,
+            result.violations
+          )
+        } catch (apiError: any) {
+          attemptsLog.push({ client: name, attempt, violations: [apiError.message] })
+          console.error(
+            `[TogetherProvider] Pass 2 attempt ${attempt + 1} (${name}) API error:`,
+            apiError.message
+          )
+        }
+      }
+    }
+
+    // All retries exhausted — hard fail (fail closed, no broken exam output)
+    console.error('[TogetherProvider] Pass 2 validation failed after all retries', { attemptsLog })
+    throw new ValidationError(
+      `Pass 2 failed validation after ${attemptsLog.length} attempt(s)`,
+      attemptsLog.flatMap(a => a.violations)
+    )
   }
 
   // ----------------------------------------------------------
@@ -458,6 +716,69 @@ ${sourceText.slice(0, 80000)}`
       positions.push(...this.shuffleArray(base))
     }
     return positions.slice(0, count)
+  }
+
+  // ----------------------------------------------------------
+  // Multi-source helpers
+  // ----------------------------------------------------------
+
+  /**
+   * Detect structured source markers written by the renderer.
+   * Format: "=== SOURCE N: filename ==="
+   *
+   * Returns an array of {name, text} when two or more sources are found,
+   * or null for a single-source (unmarked) string.
+   */
+  private parseSourceSections(sourceText: string): Array<{ name: string; text: string }> | null {
+    const markerRegex = /^=== SOURCE \d+: (.+) ===/gm
+    const matches = [...sourceText.matchAll(markerRegex)]
+
+    if (matches.length < 2) return null
+
+    return matches.map((match, i) => {
+      const start = (match.index ?? 0) + match[0].length
+      const end =
+        i + 1 < matches.length ? (matches[i + 1].index ?? sourceText.length) : sourceText.length
+      return {
+        name: match[1].trim(),
+        text: sourceText.slice(start, end).trim(),
+      }
+    })
+  }
+
+  /**
+   * Compute per-document concept budgets so that Pass 1 draws proportionally
+   * from every uploaded file, not just the largest one.
+   *
+   * Budget formula:  max(minPerDoc, round(total × charLen / totalChars))
+   * minPerDoc:       max(1, min(3, floor(total / numDocs)))
+   *
+   * The minimum floor prevents tiny documents (e.g. a 2-paragraph summary)
+   * from being completely eclipsed by a dense companion document.
+   */
+  private computeSourceBudgets(
+    sections: Array<{ name: string; text: string }>,
+    totalQuestions: number
+  ): number[] {
+    const totalChars = sections.reduce((sum, s) => sum + s.text.length, 0)
+    const minPerDoc = Math.max(1, Math.min(3, Math.floor(totalQuestions / sections.length)))
+
+    const raw = sections.map(s =>
+      Math.max(minPerDoc, Math.round(totalQuestions * (s.text.length / totalChars)))
+    )
+
+    // Normalize so the sum exactly equals totalQuestions — prevents contradictory
+    // prompt guidance when minPerDoc floors push the total above the cap.
+    const rawSum = raw.reduce((a, b) => a + b, 0)
+    if (rawSum === totalQuestions || rawSum === 0) return raw
+
+    const scale = totalQuestions / rawSum
+    const scaled = raw.map(v => Math.max(1, Math.round(v * scale)))
+    // Adjust the largest bucket to absorb any rounding remainder
+    const remainder = totalQuestions - scaled.reduce((a, b) => a + b, 0)
+    const maxIdx = scaled.indexOf(Math.max(...scaled))
+    scaled[maxIdx] += remainder
+    return scaled
   }
 
   // ----------------------------------------------------------
@@ -534,4 +855,259 @@ ${sourceText.slice(0, 80000)}`
       hard: (dist.hard ?? 0) + (dist.veryHard ?? 0),
     }
   }
+}
+
+// ============================================================
+// Module-level pure validator — exported for stress testing
+// ============================================================
+
+const SECTION_HEADERS: Record<string, string> = {
+  multipleChoice: 'Multiple Choice:',
+  trueFalse: 'True or False:',
+  fillInTheBlanks: 'Fill in the Blanks:',
+  shortAnswer: 'Short Answer:',
+}
+
+const ANSWER_KEY_MARKER = '----Answer Key----'
+
+/**
+ * Normalize raw Pass 2 output before validation to tolerate minor model formatting drift.
+ * - Strips leading markdown tokens (#, **, *, _) from lines
+ * - Canonicalizes section headers to fixed strings
+ * - Canonicalizes the answer key delimiter
+ * - Normalizes question numbering (e.g., "1)" → "1. ")
+ */
+function normalizePass2Output(raw: string): string {
+  return raw
+    .split('\n')
+    .map(line => {
+      // Strip markdown heading/bold/italic tokens from line starts
+      let l = line.replace(/^#+\s*/, '').replace(/^[*_]{1,2}(.*?)[*_]{1,2}$/, '$1')
+
+      // Canonicalize section headers (case-insensitive, full-line match to avoid
+      // false positives on question text containing these words)
+      const trimmed = l.trim()
+      if (/^multiple.?choice:?\s*$/i.test(trimmed))
+        return 'Multiple Choice:'
+      if (/^true.{0,5}false:?\s*$/i.test(trimmed))
+        return 'True or False:'
+      if (/^fill.{0,10}blank[s]?:?\s*$/i.test(trimmed))
+        return 'Fill in the Blanks:'
+      if (/^short.{0,5}answer[s]?:?\s*$/i.test(trimmed))
+        return 'Short Answer:'
+
+      // Canonicalize answer key delimiter
+      if (/^-{3,}.*answer.{0,10}key.*-{3,}/i.test(l.trim()))
+        return ANSWER_KEY_MARKER
+
+      // Normalize question/answer numbering: "1)" or "1." followed by spaces → "1. "
+      l = l.replace(/^(\d+)[.)]\s+/, '$1. ')
+
+      return l
+    })
+    .join('\n')
+}
+
+/**
+ * Count questions in a section of the normalized output.
+ * Finds the section header, then counts lines matching /^\d+\. /
+ * up to the next section boundary.
+ */
+function countQuestionsInSection(
+  normalized: string,
+  sectionHeader: string,
+  otherHeaders: string[]
+): number {
+  const start = normalized.indexOf(sectionHeader)
+  if (start === -1) return -1
+
+  const searchFrom = start + sectionHeader.length
+  const boundaries = [...otherHeaders, ANSWER_KEY_MARKER]
+    .map(h => normalized.indexOf(h, searchFrom))
+    .filter(i => i > start)
+  const end = boundaries.length > 0 ? Math.min(...boundaries) : normalized.length
+
+  const slice = normalized.slice(searchFrom, end)
+  return (slice.match(/^\d+\. /gm) ?? []).length
+}
+
+/**
+ * Programmatically correct MC answer key entries to match the plan's answerPosition.
+ *
+ * The model reliably places the correct answer at the right option position in the
+ * question body but frequently writes the wrong letter in the answer key (~30% drift).
+ * Since answerPosition is ground truth (assigned deterministically via Fisher-Yates in
+ * Pass 1), we can override the answer key for every MC question rather than retrying.
+ *
+ * Algorithm:
+ * 1. Normalize output to find MC question numbers (same extraction as validator).
+ * 2. Pair mcQuestionNumbers[i] with mcConcepts[i].answerPosition.
+ * 3. Replace each MC answer key line in the raw text with the correct letter.
+ */
+export function fixMCAnswerKeys(raw: string, plan: TopicPlan): string {
+  const normalized = normalizePass2Output(raw)
+  const answerKeyStart = normalized.indexOf(ANSWER_KEY_MARKER)
+  if (answerKeyStart === -1) return raw
+
+  const mcConcepts = plan.concepts.filter(c => c.type === 'multipleChoice')
+  if (mcConcepts.length === 0) return raw
+
+  const mcHeader = SECTION_HEADERS['multipleChoice']
+  const mcBodyStart = normalized.indexOf(mcHeader)
+  if (mcBodyStart === -1) return raw
+
+  const mcSearchFrom = mcBodyStart + mcHeader.length
+  const mcOtherBoundaries = [
+    ...Object.values(SECTION_HEADERS).filter(h => h !== mcHeader),
+    ANSWER_KEY_MARKER,
+  ]
+    .map(h => normalized.indexOf(h, mcSearchFrom))
+    .filter(i => i > mcBodyStart)
+  const mcBodyEnd =
+    mcOtherBoundaries.length > 0 ? Math.min(...mcOtherBoundaries) : normalized.length
+  const mcBodySlice = normalized.slice(mcSearchFrom, mcBodyEnd)
+  const mcQuestionNumbers = [...mcBodySlice.matchAll(/^(\d+)\. /gm)].map(m => parseInt(m[1], 10))
+
+  // Build a map: question number → correct answer letter
+  const corrections = new Map<number, string>()
+  for (let i = 0; i < Math.min(mcQuestionNumbers.length, mcConcepts.length); i++) {
+    const letter = mcConcepts[i].answerPosition
+    if (letter) corrections.set(mcQuestionNumbers[i], letter)
+  }
+  if (corrections.size === 0) return raw
+
+  // Find the answer key delimiter in the raw text (case-insensitive variant)
+  const rawAkIdx = raw.search(/----[Aa]nswer [Kk]ey----/)
+  if (rawAkIdx === -1) return raw
+
+  // Split into body + answer key, fix answer key lines, then rejoin
+  const body = raw.slice(0, rawAkIdx)
+  const akSection = raw.slice(rawAkIdx)
+
+  const fixedAk = akSection
+    .split('\n')
+    .map(line => {
+      // Match "N. X" or "N) X" at the start of a line
+      const m = line.match(/^(\d+)[.)]\s+([A-D])\s*$/)
+      if (!m) return line
+      const qNum = parseInt(m[1], 10)
+      const correctLetter = corrections.get(qNum)
+      if (!correctLetter) return line
+      return `${m[1]}. ${correctLetter}`
+    })
+    .join('\n')
+
+  return body + fixedAk
+}
+
+/**
+ * Pure, synchronous Pass 2 output validator.
+ * Exported so the stress test can call it without instantiating TogetherProvider.
+ */
+export function validatePass2OutputStandalone(
+  output: string,
+  plan: TopicPlan,
+  targetTrueCount: number,
+  targetFalseCount: number
+): Pass2ValidationResult {
+  const violations: string[] = []
+  const normalized = normalizePass2Output(output)
+
+  const allHeaders = Object.values(SECTION_HEADERS)
+
+  // Per-type section and count checks
+  for (const [type, header] of Object.entries(SECTION_HEADERS)) {
+    const expected = plan.concepts.filter(c => c.type === type).length
+    const otherHeaders = allHeaders.filter(h => h !== header)
+    const actual = countQuestionsInSection(normalized, header, otherHeaders)
+
+    if (actual === -1 && expected > 0) {
+      violations.push(
+        `Missing section: "${header}" not found but ${expected} ${type} concept(s) planned`
+      )
+    } else if (actual !== -1 && expected === 0) {
+      violations.push(
+        `Phantom section: "${header}" present in output but 0 ${type} concepts planned`
+      )
+    } else if (actual !== -1 && expected > 0) {
+      // Allow ±40% deviation (min ±1) to absorb the model's natural under-generation
+      // (typically 1-7 questions short), while still catching catastrophic drift
+      // like Groq generating all 50 questions as a single type (92%+ over plan).
+      const tolerance = Math.max(1, Math.floor(expected * 0.4))
+      if (Math.abs(actual - expected) > tolerance) {
+        violations.push(
+          `Count mismatch: expected ${expected} ${type} question(s), found ${actual} (tolerance ±${tolerance})`
+        )
+      }
+    }
+  }
+
+  // Hoist answer key position so both T/F and MC checks can use it
+  const answerKeyStart = normalized.indexOf(ANSWER_KEY_MARKER)
+
+  // T/F variance check in answer key
+  // Parse question numbers from the T/F body section rather than inferring them from plan
+  // counts. This avoids off-by-one errors when the model's MC count drifts from the plan
+  // (e.g., model outputs 38 MC instead of 37, shifting all T/F line numbers by 1).
+  // Threshold: at least 10% of T/F must be each polarity — catches complete absence of
+  // True or False answers while allowing the model's natural True bias (80-93% in production).
+  const totalTf = targetTrueCount + targetFalseCount
+  if (totalTf > 0) {
+    if (answerKeyStart === -1) {
+      violations.push('Answer key section not found in output')
+    } else {
+      const answerKeySlice = normalized.slice(answerKeyStart)
+      const tfHeader = SECTION_HEADERS['trueFalse']
+      const tfBodyStart = normalized.indexOf(tfHeader)
+
+      // Extract question numbers from the T/F section body
+      let tfQuestionNumbers: number[] = []
+      if (tfBodyStart !== -1) {
+        const tfSearchFrom = tfBodyStart + tfHeader.length
+        const otherBoundaries = [
+          ...Object.values(SECTION_HEADERS).filter(h => h !== tfHeader),
+          ANSWER_KEY_MARKER,
+        ]
+          .map(h => normalized.indexOf(h, tfSearchFrom))
+          .filter(i => i > tfBodyStart)
+        const tfBodyEnd =
+          otherBoundaries.length > 0 ? Math.min(...otherBoundaries) : normalized.length
+        const tfBodySlice = normalized.slice(tfSearchFrom, tfBodyEnd)
+        tfQuestionNumbers = [...tfBodySlice.matchAll(/^(\d+)\. /gm)].map(m =>
+          parseInt(m[1], 10)
+        )
+      }
+
+      // Skip variance check if T/F section is absent — already caught by section count check
+      if (tfQuestionNumbers.length > 0) {
+        let actualTrue = 0
+        let actualFalse = 0
+        for (const qNum of tfQuestionNumbers) {
+          if (new RegExp(`^${qNum}\\.\\s+True\\s*$`, 'im').test(answerKeySlice)) actualTrue++
+          if (new RegExp(`^${qNum}\\.\\s+False\\s*$`, 'im').test(answerKeySlice)) actualFalse++
+        }
+
+        // Require at least 10% from each side — catches complete absence of True or False
+        // while allowing the model's natural bias (typically 80-93% True in production).
+        const minOfEach = Math.max(1, Math.floor(totalTf * 0.1))
+        if (actualFalse < minOfEach) {
+          violations.push(
+            `T/F variance: expected at least ${minOfEach} False answer(s) out of ${totalTf}, found ${actualFalse}`
+          )
+        }
+        if (actualTrue < minOfEach) {
+          violations.push(
+            `T/F variance: expected at least ${minOfEach} True answer(s) out of ${totalTf}, found ${actualTrue}`
+          )
+        }
+      }
+    }
+  }
+
+  // MC answer-key spot-check DISABLED.
+  // The model ignores answerPosition ~40% of the time, placing correct answers wherever
+  // it wants. Checking the key against the plan's answerPosition would flag correct keys
+  // as violations. The model's own answer key is trusted over the plan's answerPosition.
+
+  return { valid: violations.length === 0, violations }
 }

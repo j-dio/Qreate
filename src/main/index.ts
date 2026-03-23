@@ -36,11 +36,26 @@ let mainWindow: BrowserWindow | null = null
  * Creates the main application window
  */
 function createWindow(): void {
+  const iconCandidates =
+    process.platform === 'win32'
+      ? [
+          path.join(process.cwd(), 'build/icons/qreate.ico'),
+          path.join(app.getAppPath(), 'build/icons/qreate.ico'),
+          path.join(process.cwd(), 'src/renderer/public/qreate-logo.png'),
+          path.join(__dirname, '../renderer/qreate-logo.png'),
+        ]
+      : [
+          path.join(process.cwd(), 'src/renderer/public/qreate-logo.png'),
+          path.join(__dirname, '../renderer/qreate-logo.png'),
+        ]
+  const iconPath = iconCandidates.find(candidate => existsSync(candidate))
+
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     minWidth: 800,
     minHeight: 600,
+    icon: iconPath,
     webPreferences: {
       // Enable Node.js integration in renderer (we'll secure this later with context isolation)
       nodeIntegration: false,
@@ -205,73 +220,83 @@ async function registerIpcHandlers(): Promise<void> {
 
   /**
    * Extract text from File object (for drag-and-drop files without paths)
-   * 
+   *
    * This handles the case where files are dragged from external sources
    * and don't have accessible file paths due to browser security restrictions.
-   * 
+   *
    * @param fileData - File data (name, content buffer, type)
    * @returns Text extraction result
    */
-  ipcMain.handle('extract-file-text-from-buffer', async (_, fileData: { name: string, buffer: Uint8Array, type: string }) => {
-    console.log('[IPC] Extract text from buffer for:', fileData.name, 'type:', fileData.type, 'buffer size:', fileData.buffer?.length)
-    
-    try {
-      // Validate input data
-      if (!fileData.name) {
-        throw new Error('File name is required')
-      }
-      if (!fileData.buffer || fileData.buffer.length === 0) {
-        throw new Error('File buffer is empty or missing')
-      }
-      
-      // Save buffer to temporary file for processing
-      const tmpPath = path.join(process.cwd(), 'temp', `${Date.now()}-${fileData.name}`)
-      console.log('[IPC] Creating temporary file at:', tmpPath)
-      
-      // Ensure temp directory exists
-      const tempDir = path.dirname(tmpPath)
-      if (!existsSync(tempDir)) {
-        console.log('[IPC] Creating temp directory:', tempDir)
-        await fs.mkdir(tempDir, { recursive: true })
-      }
-      
-      // Write buffer to temporary file
-      const fileBuffer = Buffer.from(fileData.buffer)
-      console.log('[IPC] Writing buffer to file, converted buffer size:', fileBuffer.length)
-      await fs.writeFile(tmpPath, fileBuffer)
-      
-      // Verify file was written
-      const stats = await fs.stat(tmpPath)
-      console.log('[IPC] Temp file created successfully, size:', stats.size)
-      
-      // Extract text using the existing service
-      console.log('[IPC] Starting text extraction...')
-      const result = await fileTextExtractor.extractText(tmpPath)
-      console.log('[IPC] Text extraction completed:', result.success ? 'SUCCESS' : 'FAILED')
-      
-      // Clean up temporary file
+  ipcMain.handle(
+    'extract-file-text-from-buffer',
+    async (_, fileData: { name: string; buffer: Uint8Array; type: string }) => {
+      console.log(
+        '[IPC] Extract text from buffer for:',
+        fileData.name,
+        'type:',
+        fileData.type,
+        'buffer size:',
+        fileData.buffer?.length
+      )
+
       try {
-        await fs.unlink(tmpPath)
-        console.log('[IPC] Temp file cleaned up successfully')
-      } catch (cleanupError) {
-        console.warn('[IPC] Failed to cleanup temp file:', cleanupError)
-      }
-      
-      console.log('[IPC] Buffer extraction result:', {
-        success: result.success,
-        textLength: result.text?.length || 0,
-        error: result.error,
-      })
-      
-      return result
-    } catch (error) {
-      console.error('[IPC] Buffer extraction failed:', error)
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to extract text from file'
+        // Validate input data
+        if (!fileData.name) {
+          throw new Error('File name is required')
+        }
+        if (!fileData.buffer || fileData.buffer.length === 0) {
+          throw new Error('File buffer is empty or missing')
+        }
+
+        // Save buffer to temporary file for processing
+        const tmpPath = path.join(process.cwd(), 'temp', `${Date.now()}-${fileData.name}`)
+        console.log('[IPC] Creating temporary file at:', tmpPath)
+
+        // Ensure temp directory exists
+        const tempDir = path.dirname(tmpPath)
+        if (!existsSync(tempDir)) {
+          console.log('[IPC] Creating temp directory:', tempDir)
+          await fs.mkdir(tempDir, { recursive: true })
+        }
+
+        // Write buffer to temporary file
+        const fileBuffer = Buffer.from(fileData.buffer)
+        console.log('[IPC] Writing buffer to file, converted buffer size:', fileBuffer.length)
+        await fs.writeFile(tmpPath, fileBuffer)
+
+        // Verify file was written
+        const stats = await fs.stat(tmpPath)
+        console.log('[IPC] Temp file created successfully, size:', stats.size)
+
+        // Extract text using the existing service
+        console.log('[IPC] Starting text extraction...')
+        const result = await fileTextExtractor.extractText(tmpPath)
+        console.log('[IPC] Text extraction completed:', result.success ? 'SUCCESS' : 'FAILED')
+
+        // Clean up temporary file
+        try {
+          await fs.unlink(tmpPath)
+          console.log('[IPC] Temp file cleaned up successfully')
+        } catch (cleanupError) {
+          console.warn('[IPC] Failed to cleanup temp file:', cleanupError)
+        }
+
+        console.log('[IPC] Buffer extraction result:', {
+          success: result.success,
+          textLength: result.text?.length || 0,
+          error: result.error,
+        })
+
+        return result
+      } catch (error) {
+        console.error('[IPC] Buffer extraction failed:', error)
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to extract text from file',
+        }
       }
     }
-  })
+  )
 
   /**
    * Google Drive: Check if authenticated
@@ -463,7 +488,7 @@ async function registerIpcHandlers(): Promise<void> {
       return {
         ...result,
         success: result.success,
-        providerInfo: providerFactory.getProviderInfo()
+        providerInfo: providerFactory.getProviderInfo(),
       }
     } catch (error) {
       console.error('[IPC] AI provider connection test failed:', error)
@@ -536,7 +561,7 @@ async function registerIpcHandlers(): Promise<void> {
       console.error('[IPC] Failed to get provider info:', error)
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to get provider info'
+        error: error instanceof Error ? error.message : 'Failed to get provider info',
       }
     }
   })
@@ -544,12 +569,12 @@ async function registerIpcHandlers(): Promise<void> {
   /**
    * AI Provider: Generate exam
    *
-   * Backend-managed exam generation using configurable AI providers (Gemini, Groq).
-   * No API key required from user - handled server-side.
+   * Two-pass PFQS generation via Together AI (Qwen3-235B) with Groq fallback.
+   * API keys are loaded from .env.local in the main process — not exposed to renderer.
    *
    * Features:
-   * - Multi-provider support (Gemini, Groq) with automatic fallback
-   * - Per-user quotas (10/week, 3/day burst, 40/month) 
+   * - Two-pass generation: Pass 1 topic plan (JSON), Pass 2 questions from plan
+   * - Per-user quotas (10/week, 3/day burst, 40/month)
    * - Global rate limiting and usage tracking
    * - Retry logic with exponential backoff
    * - Usage tracking in SQLite database
@@ -600,8 +625,12 @@ async function registerIpcHandlers(): Promise<void> {
 
       // If rate limiting is enabled, wait the required delay
       if (usageCheck.rateLimitInfo && usageCheck.rateLimitInfo.mustWaitSeconds > 0) {
-        console.log(`[RateLimit] Waiting ${usageCheck.rateLimitInfo.mustWaitSeconds} seconds before generation...`)
-        await new Promise(resolve => setTimeout(resolve, usageCheck.rateLimitInfo!.mustWaitSeconds * 1000))
+        console.log(
+          `[RateLimit] Waiting ${usageCheck.rateLimitInfo.mustWaitSeconds} seconds before generation...`
+        )
+        await new Promise(resolve =>
+          setTimeout(resolve, usageCheck.rateLimitInfo!.mustWaitSeconds * 1000)
+        )
       }
 
       // Check global rate limits
@@ -615,7 +644,11 @@ async function registerIpcHandlers(): Promise<void> {
       }
 
       try {
-        const { content: examContent, providerUsed, actualQuestions } = await providerFactory.generateExam(config, sourceText)
+        const {
+          content: examContent,
+          providerUsed,
+          actualQuestions,
+        } = await providerFactory.generateExam(config, sourceText)
 
         // Parse the exam content into structured format
         console.log('[IPC] Parsing generated exam content...')
@@ -674,16 +707,16 @@ async function registerIpcHandlers(): Promise<void> {
    */
   ipcMain.handle('auth-register', async (_, name: string, email: string, password: string) => {
     console.log('[IPC] User registration request for email:', email)
-    
+
     try {
       const result = await authService.register({ name, email, password })
-      
+
       if (result.success) {
         console.log('[IPC] User registered successfully:', result.user?.id)
       } else {
         console.log('[IPC] Registration failed:', result.error)
       }
-      
+
       return result
     } catch (error) {
       console.error('[IPC] Registration error:', error)
@@ -703,16 +736,16 @@ async function registerIpcHandlers(): Promise<void> {
    */
   ipcMain.handle('auth-login', async (_, email: string, password: string) => {
     console.log('[IPC] User login request for email:', email)
-    
+
     try {
       const result = await authService.login({ email, password })
-      
+
       if (result.success) {
         console.log('[IPC] User logged in successfully:', result.user?.id)
       } else {
         console.log('[IPC] Login failed:', result.error)
       }
-      
+
       return result
     } catch (error) {
       console.error('[IPC] Login error:', error)
@@ -731,7 +764,7 @@ async function registerIpcHandlers(): Promise<void> {
    */
   ipcMain.handle('auth-logout', async (_, sessionToken: string) => {
     console.log('[IPC] User logout request')
-    
+
     try {
       authService.logout(sessionToken)
       console.log('[IPC] User logged out successfully')
@@ -750,7 +783,7 @@ async function registerIpcHandlers(): Promise<void> {
    */
   ipcMain.handle('auth-validate-session', async (_, sessionToken: string) => {
     const validation = authService.validateSession(sessionToken)
-    
+
     if (validation.valid && validation.userId) {
       const userData = authService.getUserBySession(sessionToken)
       return {
@@ -759,7 +792,7 @@ async function registerIpcHandlers(): Promise<void> {
         user: userData,
       }
     }
-    
+
     return {
       success: true,
       valid: false,
@@ -776,23 +809,28 @@ async function registerIpcHandlers(): Promise<void> {
    */
   ipcMain.handle('get-exam-history', async (_, sessionToken: string, limit: number = 50) => {
     console.log('[IPC] Get exam history request')
-    
+
     try {
       // Validate session
       const validation = authService.validateSession(sessionToken)
-      
+
       if (!validation.valid || !validation.userId) {
         return {
           success: false,
           error: 'Invalid session. Please log in again.',
         }
       }
-      
+
       // Get exam history from database
       const examHistory = databaseService.getExamHistory(validation.userId, limit)
-      
-      console.log('[IPC] Retrieved', examHistory.length, 'exam records for user:', validation.userId)
-      
+
+      console.log(
+        '[IPC] Retrieved',
+        examHistory.length,
+        'exam records for user:',
+        validation.userId
+      )
+
       return {
         success: true,
         exams: examHistory,
@@ -815,23 +853,28 @@ async function registerIpcHandlers(): Promise<void> {
    */
   ipcMain.handle('get-recent-exams', async (_, sessionToken: string, limit: number = 3) => {
     console.log('[IPC] Get recent exams request, limit:', limit)
-    
+
     try {
       // Validate session
       const validation = authService.validateSession(sessionToken)
-      
+
       if (!validation.valid || !validation.userId) {
         return {
           success: false,
           error: 'Invalid session. Please log in again.',
         }
       }
-      
+
       // Get recent exams from database (last 24 hours only)
       const recentExams = databaseService.getRecentExams(validation.userId, limit)
-      
-      console.log('[IPC] Retrieved', recentExams.length, 'recent exam records for user:', validation.userId)
-      
+
+      console.log(
+        '[IPC] Retrieved',
+        recentExams.length,
+        'recent exam records for user:',
+        validation.userId
+      )
+
       return {
         success: true,
         exams: recentExams,
@@ -845,7 +888,6 @@ async function registerIpcHandlers(): Promise<void> {
     }
   })
 
-
   /**
    * Get paginated exam history for MyExamsPage
    *
@@ -854,37 +896,51 @@ async function registerIpcHandlers(): Promise<void> {
    * @param pageSize - Number of exams per page (default: 15)
    * @returns Paginated exam records with metadata
    */
-  ipcMain.handle('get-exam-history-paginated', async (_, sessionToken: string, page: number = 1, pageSize: number = 15) => {
-    console.log('[IPC] Get paginated exam history request, page:', page, 'size:', pageSize)
-    
-    try {
-      // Validate session
-      const validation = authService.validateSession(sessionToken)
-      
-      if (!validation.valid || !validation.userId) {
+  ipcMain.handle(
+    'get-exam-history-paginated',
+    async (_, sessionToken: string, page: number = 1, pageSize: number = 15) => {
+      console.log('[IPC] Get paginated exam history request, page:', page, 'size:', pageSize)
+
+      try {
+        // Validate session
+        const validation = authService.validateSession(sessionToken)
+
+        if (!validation.valid || !validation.userId) {
+          return {
+            success: false,
+            error: 'Invalid session. Please log in again.',
+          }
+        }
+
+        // Get paginated exam history from database
+        const paginatedResult = databaseService.getExamHistoryPaginated(
+          validation.userId,
+          page,
+          pageSize
+        )
+
+        console.log(
+          '[IPC] Retrieved page',
+          page,
+          'with',
+          paginatedResult.exams.length,
+          'exams, total:',
+          paginatedResult.totalCount
+        )
+
+        return {
+          success: true,
+          ...paginatedResult,
+        }
+      } catch (error) {
+        console.error('[IPC] Get paginated exam history error:', error)
         return {
           success: false,
-          error: 'Invalid session. Please log in again.',
+          error: 'Failed to retrieve paginated exam history.',
         }
       }
-      
-      // Get paginated exam history from database
-      const paginatedResult = databaseService.getExamHistoryPaginated(validation.userId, page, pageSize)
-      
-      console.log('[IPC] Retrieved page', page, 'with', paginatedResult.exams.length, 'exams, total:', paginatedResult.totalCount)
-      
-      return {
-        success: true,
-        ...paginatedResult,
-      }
-    } catch (error) {
-      console.error('[IPC] Get paginated exam history error:', error)
-      return {
-        success: false,
-        error: 'Failed to retrieve paginated exam history.',
-      }
     }
-  })
+  )
 
   /**
    * Save exam to history
@@ -895,45 +951,59 @@ async function registerIpcHandlers(): Promise<void> {
    * @param pdfPath - Path to generated PDF file
    * @returns Success status with exam ID
    */
-  ipcMain.handle('save-exam-to-history', async (_, sessionToken: string, userId: number, examData: { title: string, topic: string, totalQuestions: number }, pdfPath: string) => {
-    console.log('[IPC] Save exam to history request for user:', userId, 'with session token:', sessionToken ? 'present' : 'missing')
-    
-    try {
-      // Validate that the user exists in the database
-      const validation = authService.validateUserExists(userId)
-      console.log('[IPC] User validation result:', validation)
-      
-      if (!validation.valid || !validation.userId) {
-        console.log('[IPC] User validation failed, reason:', validation.error)
+  ipcMain.handle(
+    'save-exam-to-history',
+    async (
+      _,
+      sessionToken: string,
+      userId: number,
+      examData: { title: string; topic: string; totalQuestions: number },
+      pdfPath: string
+    ) => {
+      console.log(
+        '[IPC] Save exam to history request for user:',
+        userId,
+        'with session token:',
+        sessionToken ? 'present' : 'missing'
+      )
+
+      try {
+        // Validate that the user exists in the database
+        const validation = authService.validateUserExists(userId)
+        console.log('[IPC] User validation result:', validation)
+
+        if (!validation.valid || !validation.userId) {
+          console.log('[IPC] User validation failed, reason:', validation.error)
+          return {
+            success: false,
+            error: 'Invalid user. Please log in again.',
+          }
+        }
+
+        // Save exam to database
+        const examId = databaseService.saveExam(
+          validation.userId,
+          examData.title,
+          examData.topic,
+          examData.totalQuestions,
+          pdfPath
+        )
+
+        console.log('[IPC] Exam saved to history with ID:', examId)
+
+        return {
+          success: true,
+          examId: examId,
+        }
+      } catch (error) {
+        console.error('[IPC] Save exam to history error:', error)
         return {
           success: false,
-          error: 'Invalid user. Please log in again.',
+          error: 'Failed to save exam to history.',
         }
       }
-      
-      // Save exam to database
-      const examId = databaseService.saveExam(
-        validation.userId,
-        examData.title,
-        examData.topic,
-        examData.totalQuestions,
-        pdfPath
-      )
-      
-      console.log('[IPC] Exam saved to history with ID:', examId)
-      
-      return {
-        success: true,
-        examId: examId,
-      }
-    } catch (error) {
-      console.error('[IPC] Save exam to history error:', error)
-      return {
-        success: false,
-        error: 'Failed to save exam to history.',
-      }
     }
-  })
+  )
 
   console.log('[IPC] Handlers registered successfully')
 }

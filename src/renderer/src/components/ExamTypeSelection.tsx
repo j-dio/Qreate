@@ -7,7 +7,17 @@
  */
 
 import { useState, useEffect } from 'react'
-import { AlertCircle, CheckCircle2, RotateCcw, Sparkles, Minus, Plus } from 'lucide-react'
+import {
+  AlertCircle,
+  CheckCircle2,
+  RotateCcw,
+  Sparkles,
+  Minus,
+  Plus,
+  Scale,
+  Type,
+  PencilLine,
+} from 'lucide-react'
 import {
   useExamConfigStore,
   QUESTION_TYPES,
@@ -32,19 +42,19 @@ const PRESETS: Record<
 > = {
   quickQuiz: {
     name: 'Quick Quiz',
-    description: '20 questions — multiple choice & true/false',
+    description: '20 questions—multiple choice & true/false',
     types: { multipleChoice: true, trueFalse: true, fillInTheBlanks: false, shortAnswer: false },
     totalQuestions: 20,
   },
   standardExam: {
     name: 'Standard Exam',
-    description: '35 questions — all types',
+    description: '35 questions—all types',
     types: { multipleChoice: true, trueFalse: true, fillInTheBlanks: true, shortAnswer: true },
     totalQuestions: 35,
   },
   comprehensive: {
     name: 'Comprehensive',
-    description: '50 questions — all types',
+    description: '50 questions—all types',
     types: { multipleChoice: true, trueFalse: true, fillInTheBlanks: true, shortAnswer: true },
     totalQuestions: 50,
   },
@@ -55,6 +65,21 @@ const ICON_COLORS: Record<string, string> = {
   scale: 'bg-cyan-100 text-cyan-700',
   'text-cursor': 'bg-amber-100 text-amber-700',
   pencil: 'bg-rose-100 text-rose-700',
+}
+
+function renderQuestionTypeIcon(icon: string) {
+  switch (icon) {
+    case 'check-circle':
+      return <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
+    case 'scale':
+      return <Scale className="h-5 w-5" aria-hidden="true" />
+    case 'text-cursor':
+      return <Type className="h-5 w-5" aria-hidden="true" />
+    case 'pencil':
+      return <PencilLine className="h-5 w-5" aria-hidden="true" />
+    default:
+      return <Type className="h-5 w-5" aria-hidden="true" />
+  }
 }
 
 export function ExamTypeSelection() {
@@ -178,10 +203,10 @@ export function ExamTypeSelection() {
                   onChange={e => setQuestionTypeEnabled(type, e.target.checked)}
                   className="mt-0.5 h-4 w-4 accent-primary"
                 />
-                <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded ${iconColor}`}>
-                  <span className="text-sm font-bold">
-                    {type === 'multipleChoice' ? 'MC' : type === 'trueFalse' ? 'TF' : type === 'fillInTheBlanks' ? 'FB' : 'SA'}
-                  </span>
+                <div
+                  className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded ${iconColor}`}
+                >
+                  {renderQuestionTypeIcon(cfg.icon)}
                 </div>
                 <div className="flex-1">
                   <p className="text-sm font-semibold text-foreground">{cfg.label}</p>
@@ -200,7 +225,8 @@ export function ExamTypeSelection() {
             <div>
               <h3 className="text-base font-semibold text-foreground">Total Questions</h3>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Cap: {EXAM_CONFIG_RULES.MIN_TOTAL_ITEMS}–{EXAM_CONFIG_RULES.MAX_TOTAL_ITEMS} questions
+                Cap: {EXAM_CONFIG_RULES.MIN_TOTAL_ITEMS}–{EXAM_CONFIG_RULES.MAX_TOTAL_ITEMS}{' '}
+                questions
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -218,7 +244,10 @@ export function ExamTypeSelection() {
                 type="number"
                 value={inputValue}
                 onChange={handleCountChange}
-                onFocus={e => { setIsFocused(true); e.target.select() }}
+                onFocus={e => {
+                  setIsFocused(true)
+                  e.target.select()
+                }}
                 onBlur={handleCountBlur}
                 min={EXAM_CONFIG_RULES.MIN_TOTAL_ITEMS}
                 max={EXAM_CONFIG_RULES.MAX_TOTAL_ITEMS}

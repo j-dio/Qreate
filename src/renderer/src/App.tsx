@@ -10,8 +10,7 @@
  * - /settings - Settings page (protected)
  * - /create-exam - File upload (protected)
  * - /create-exam/types - Exam type selection (protected)
- * - /create-exam/difficulty - Difficulty distribution (protected)
- * - /create-exam/review - Review & confirmation (protected)
+ *- /create-exam/review - Review & confirmation (protected)
  * - /create-exam/generate - Exam generation progress (protected)
  * - /create-exam/success - Exam success & Google Drive export (protected)
  *
@@ -29,7 +28,6 @@ import { SettingsPage } from './pages/SettingsPage'
 import { MyExamsPage } from './pages/MyExamsPage'
 import { FileUploadPage } from './pages/FileUploadPage'
 import { ExamTypeSelectionPage } from './pages/ExamTypeSelectionPage'
-import { DifficultyDistributionPage } from './pages/DifficultyDistributionPage'
 import { ReviewConfirmationPage } from './pages/ReviewConfirmationPage'
 import { ExamGenerationProgressPage } from './pages/ExamGenerationProgressPage'
 import { ExamSuccessPage } from './pages/ExamSuccessPage'
@@ -81,7 +79,7 @@ function App() {
       if (sessionToken && !user) {
         try {
           const result = await window.electron.auth.validateSession(sessionToken)
-          
+
           if (result.success && result.valid && result.user) {
             // Session is valid - restore user data
             setUserAndSession(
@@ -107,7 +105,7 @@ function App() {
           logout()
         }
       }
-      
+
       setIsInitializing(false)
     }
 
@@ -119,7 +117,12 @@ function App() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-center">
-          <div className="mb-4 text-2xl font-bold">Qreate</div>
+          <img
+            src="/qreate-logo.png"
+            alt="Qreate logo"
+            className="mx-auto mb-4 h-16 w-16 rounded-2xl border border-border/70 bg-white object-cover"
+          />
+          <div className="mb-2 text-2xl font-bold">Qreate</div>
           <div className="text-muted-foreground">Loading...</div>
         </div>
       </div>
@@ -185,14 +188,6 @@ function App() {
           element={
             <ProtectedRoute>
               <ExamTypeSelectionPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/create-exam/difficulty"
-          element={
-            <ProtectedRoute>
-              <DifficultyDistributionPage />
             </ProtectedRoute>
           }
         />

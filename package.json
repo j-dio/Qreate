@@ -1,10 +1,10 @@
 {
   "name": "qreate",
-  "version": "0.1.0",
-  "description": "An automated test creator desktop app",
+  "version": "1.0.0",
+  "description": "AI-powered desktop app that transforms study materials into realistic practice exams",
   "main": "dist/main/index.js",
-  "author": "",
-  "license": "ISC",
+  "author": "John Dio Lumacang",
+  "license": "MIT",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
@@ -24,6 +24,12 @@
     "url": "https://github.com/j-dio/Qreate/issues"
   },
   "homepage": "https://github.com/j-dio/Qreate#readme",
+  "build": {
+    "productName": "Qreate",
+    "win": {
+      "icon": "build/icons/qreate.ico"
+    }
+  },
   "dependencies": {
     "@berthojoris/mcp-sqlite-server": "^1.1.1",
     "@modelcontextprotocol/server-filesystem": "^2025.8.21",

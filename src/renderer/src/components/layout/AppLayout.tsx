@@ -14,14 +14,7 @@
  * └─────────────────────────────────┘
  */
 
-import {
-  GraduationCap,
-  Signpost,
-  SlidersHorizontal,
-  FolderKanban,
-  PlusCircle,
-  UserCircle2,
-} from 'lucide-react'
+import { Signpost, SlidersHorizontal, FolderKanban, PlusCircle, UserCircle2 } from 'lucide-react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAppStore } from '../../store/useAppStore'
 import { Button } from '../ui/Button'
@@ -50,9 +43,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         <div className="flex min-h-16 items-center px-6 py-2">
           {/* Logo */}
           <div className="flex items-center gap-2">
-            <div className="rounded-lg bg-primary/15 p-2 text-primary">
-              <GraduationCap className="h-5 w-5" />
-            </div>
+            <img src="/qreate-logo.png" alt="Qreate logo" className="h-16 w-16 object-contain" />
             <h1 className="text-xl font-extrabold">Qreate</h1>
           </div>
 

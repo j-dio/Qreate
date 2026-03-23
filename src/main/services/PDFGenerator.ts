@@ -127,12 +127,225 @@ export class PDFGenerator {
    * @param examData - Raw exam data from Groq
    * @returns HTML string
    */
+  /**
+   * Renumber questions sequentially in display order.
+   *
+   * The AI assigns concept IDs globally across all question types, so questions
+   * within each type-section end up with non-sequential numbers (e.g., MC gets
+   * 1, 7, 12… and T/F gets 3, 4, 5…). This post-processor walks the exam body
+   * in display order, builds an old→new mapping, renumbers every question line,
+   * and rebuilds the answer key to match — without touching any question text,
+   * options, or answer content.
+   *
+   * Ghost answers (answer-key entries with no corresponding question body) are
+   * silently dropped so the key stays consistent with what is actually printed.
+   */
+  private renumberContent(content: string): string {
+    // Locate the answer key delimiter
+    const delimiterRegex = /\n(----+\s*Answer Key\s*----+)\s*\n/i
+    const delimMatch = content.match(delimiterRegex)
+
+    if (!delimMatch || delimMatch.index === undefined) {
+      return content // No recognisable answer key — return as-is
+    }
+
+    const examBody = content.slice(0, delimMatch.index)
+    const answerKeyRaw = content.slice(delimMatch.index + delimMatch[0].length)
+    const delimStr = delimMatch[1]
+
+    // Walk exam body lines in display order, collect question numbers as seen
+    const oldToNew = new Map<number, number>()
+    let displayCounter = 0
+    for (const line of examBody.split('\n')) {
+      const m = line.match(/^(\d+)\.\s+\S/)
+      if (m) {
+        const oldNum = parseInt(m[1], 10)
+        if (!oldToNew.has(oldNum)) {
+          displayCounter++
+          oldToNew.set(oldNum, displayCounter)
+        }
+      }
+    }
+
+    // If numbering is already sequential, nothing to do
+    let alreadySequential = true
+    let expected = 1
+    for (const [oldNum, newNum] of oldToNew) {
+      if (oldNum !== newNum || newNum !== expected) {
+        alreadySequential = false
+        break
+      }
+      expected++
+    }
+    if (alreadySequential) return content
+
+    // Renumber question lines in exam body (only lines in oldToNew are affected)
+    const renumberedBody = examBody.replace(/^(\d+)(\.\s)/gm, (match, numStr, rest) => {
+      const oldNum = parseInt(numStr, 10)
+      const newNum = oldToNew.get(oldNum)
+      return newNum !== undefined ? `${newNum}${rest}` : match
+    })
+
+    // Parse answer key: collect each numbered entry (handles multi-line answers)
+    const answerEntries = new Map<number, string>()
+    let currentAKNum: number | null = null
+    const currentAKLines: string[] = []
+
+    for (const line of answerKeyRaw.split('\n')) {
+      const m = line.match(/^(\d+)\.\s+(.+)/)
+      if (m) {
+        if (currentAKNum !== null && currentAKLines.length > 0) {
+          answerEntries.set(currentAKNum, currentAKLines.join('\n'))
+          currentAKLines.length = 0
+        }
+        currentAKNum = parseInt(m[1], 10)
+        currentAKLines.push(m[2])
+      } else if (currentAKNum !== null && line.trim()) {
+        currentAKLines.push(line) // continuation of long answer
+      }
+    }
+    if (currentAKNum !== null && currentAKLines.length > 0) {
+      answerEntries.set(currentAKNum, currentAKLines.join('\n'))
+    }
+
+    // Rebuild answer key in new display order; drop ghost entries (no matching question body)
+    const sortedEntries = Array.from(oldToNew.entries()).sort((a, b) => a[1] - b[1])
+    const newAnswerLines: string[] = []
+    for (const [oldNum, newNum] of sortedEntries) {
+      const answer = answerEntries.get(oldNum)
+      if (answer !== undefined) {
+        newAnswerLines.push(`${newNum}. ${answer}`)
+      }
+    }
+
+    return renumberedBody + '\n' + delimStr + '\n' + newAnswerLines.join('\n')
+  }
+
+  /**
+   * Convert raw exam text into structured HTML with proper spacing.
+   *
+   * - Section headers (Multiple Choice:, True or False:, etc.) become bold <h3> elements
+   * - Each question block is wrapped in a <div class="question-block"> with bottom margin
+   * - Short Answer questions get a writing space below them
+   * - The Answer Key delimiter becomes a page-breaking header
+   * - Answer key entries each get a small gap div
+   */
+  private formatContentAsStructuredHTML(content: string): string {
+    const answerKeyDelimRegex = /^----+\s*Answer Key\s*----+\s*$/im
+    const delimMatch = content.match(answerKeyDelimRegex)
+
+    const sectionHeaderRegex =
+      /^(Multiple Choice:|True or False:|Fill in the Blanks:|Short Answer:)\s*$/im
+    const questionLineRegex = /^\d+\.\s+\S/
+    const answerKeyLineRegex = /^\d+\.\s+/
+
+    const escHtml = (text: string): string =>
+      text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+
+    let examBody = content
+    let answerKeyRaw = ''
+    let answerKeyDelimText = '----Answer Key----'
+
+    if (delimMatch && delimMatch.index !== undefined) {
+      examBody = content.slice(0, delimMatch.index)
+      answerKeyRaw = content.slice(delimMatch.index + delimMatch[0].length)
+      answerKeyDelimText = delimMatch[0].trim()
+    }
+
+    // --- Render exam body ---
+    // Collect lines and group into question blocks or section headers
+    const examLines = examBody.split('\n')
+
+    // Detect whether we are currently in a Short Answer section
+    let inShortAnswer = false
+
+    let examHtml = ''
+    let currentBlockLines: string[] = []
+    let currentBlockIsQuestion = false
+    let currentBlockIsShortAnswer = false
+
+    const flushBlock = (): void => {
+      if (currentBlockLines.length === 0) return
+      if (currentBlockIsQuestion) {
+        const blockContent = currentBlockLines.map(escHtml).join('<br>')
+        examHtml += `<div class="question-block">${blockContent}`
+        if (currentBlockIsShortAnswer) {
+          examHtml += `<div class="writing-space"></div>`
+        }
+        examHtml += `</div>\n`
+      } else {
+        // non-question non-header lines (e.g. "General Topic: …") — emit as paragraph
+        examHtml += `<p>${currentBlockLines.map(escHtml).join('<br>')}</p>\n`
+      }
+      currentBlockLines = []
+      currentBlockIsQuestion = false
+      currentBlockIsShortAnswer = false
+    }
+
+    for (const rawLine of examLines) {
+      const trimmed = rawLine.trim()
+      if (trimmed === '') continue // skip blank lines — CSS spacing handles separation
+
+      // Section header?
+      if (sectionHeaderRegex.test(trimmed)) {
+        flushBlock()
+        inShortAnswer = /^short.{0,5}answer/i.test(trimmed)
+        examHtml += `<h3 class="section-header">${escHtml(trimmed)}</h3>\n`
+        continue
+      }
+
+      // Question line (starts a new block)?
+      if (questionLineRegex.test(trimmed)) {
+        flushBlock()
+        currentBlockIsQuestion = true
+        currentBlockIsShortAnswer = inShortAnswer
+        currentBlockLines.push(rawLine)
+        continue
+      }
+
+      // Option line or continuation of current block
+      if (currentBlockIsQuestion) {
+        currentBlockLines.push(rawLine)
+      } else {
+        // Before the first question (e.g., "General Topic:" line)
+        currentBlockLines.push(rawLine)
+      }
+    }
+    flushBlock()
+
+    // --- Render answer key ---
+    let answerKeyHtml = ''
+    if (delimMatch) {
+      answerKeyHtml += `<h3 class="answer-key-header">${escHtml(answerKeyDelimText)}</h3>\n`
+      for (const rawLine of answerKeyRaw.split('\n')) {
+        const trimmed = rawLine.trim()
+        if (trimmed === '') continue
+        if (answerKeyLineRegex.test(trimmed)) {
+          answerKeyHtml += `<div class="answer-entry">${escHtml(trimmed)}</div>\n`
+        } else {
+          // Continuation of a multi-line answer (e.g., short answer text)
+          answerKeyHtml += `<div class="answer-entry answer-continuation">${escHtml(trimmed)}</div>\n`
+        }
+      }
+    }
+
+    return examHtml + answerKeyHtml
+  }
+
   private formatGroqExamAsHTML(examData: any): string {
     const { content, totalQuestions, metadata } = examData
-    
+
+    // Normalise question numbering to sequential display order before rendering
+    const normalisedContent = this.renumberContent(content)
+
     // Extract topic from content (first line after "General Topic:")
     let topic = 'Generated Exam'
-    const topicMatch = content.match(/General Topic:\s*(.+?)(?:\n|----)/i)
+    const topicMatch = normalisedContent.match(/General Topic:\s*(.+?)(?:\n|----)/i)
     if (topicMatch) {
       topic = topicMatch[1].trim()
     }
@@ -169,9 +382,40 @@ export class PDFGenerator {
       color: #666;
     }
     .content {
-      white-space: pre-line;
       font-size: 12px;
       line-height: 1.5;
+    }
+    .question-block {
+      margin-bottom: 16px;
+    }
+    .section-header {
+      font-weight: bold;
+      font-size: 14px;
+      margin-top: 24px;
+      margin-bottom: 12px;
+      border-bottom: 1px solid #999;
+      padding-bottom: 4px;
+    }
+    .writing-space {
+      min-height: 60px;
+      border-bottom: 1px solid #ccc;
+      margin-bottom: 16px;
+    }
+    .answer-entry {
+      margin-bottom: 6px;
+    }
+    .answer-continuation {
+      margin-left: 20px;
+      margin-bottom: 4px;
+    }
+    .answer-key-header {
+      font-weight: bold;
+      font-size: 16px;
+      margin-top: 32px;
+      margin-bottom: 16px;
+      border-bottom: 2px solid #333;
+      padding-bottom: 8px;
+      page-break-before: always;
     }
     .page-break {
       page-break-before: always;
@@ -194,9 +438,9 @@ export class PDFGenerator {
       ${totalQuestions} Questions | Generated with Qreate | ${new Date().toLocaleDateString()}
     </div>
   </div>
-  
+
   <div class="content">
-${content}
+${this.formatContentAsStructuredHTML(normalisedContent)}
   </div>
 
   <div class="footer">

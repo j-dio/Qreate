@@ -4,7 +4,7 @@
  * Phase 2, Step 4: Final review before exam generation
  *
  * User Flow:
- * 1. User arrives from Difficulty Distribution
+ * 1. User arrives from Exam Type Selection
  * 2. Review all configuration settings
  * 3. See estimated processing time and API usage
  * 4. Can edit any section by clicking Edit buttons
@@ -39,7 +39,6 @@ export function ReviewConfirmationPage() {
   // Get state from stores
   const uploadedFiles = useFileUploadStore(state => state.uploadedFiles)
   const totalQuestions = useExamConfigStore(state => state.getTotalQuestions())
-  const difficultyDistribution = useExamConfigStore(state => state.difficultyDistribution)
 
   // Check AI provider connection
   useEffect(() => {
@@ -103,17 +102,7 @@ export function ReviewConfirmationPage() {
       navigate('/create-exam/types')
       return
     }
-
-    // Must have completed difficulty distribution
-    const totalDistributed = Object.values(difficultyDistribution).reduce(
-      (sum, val) => sum + val,
-      0
-    )
-    if (totalDistributed !== totalQuestions) {
-      navigate('/create-exam/difficulty')
-      return
-    }
-  }, [uploadedFiles, totalQuestions, difficultyDistribution, navigate])
+  }, [uploadedFiles, totalQuestions, navigate])
 
   // Calculate estimates for Together AI backend (Qwen3-235B two-pass is slow — ~1 min per 15 questions)
   const estimatedMinutes = Math.max(1, Math.round(totalQuestions / 15))
@@ -121,7 +110,7 @@ export function ReviewConfirmationPage() {
   const estimatedCost = 'Free' // Together AI free tier
 
   const handleBack = () => {
-    navigate('/create-exam/difficulty')
+    navigate('/create-exam/types')
   }
 
   const handleGenerate = async () => {
@@ -144,13 +133,13 @@ export function ReviewConfirmationPage() {
           className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
-          <span>Back to Difficulty</span>
+          <span>Back to Question Types</span>
         </button>
 
-        <span className="step-kicker">Step 4 of 4</span>
+        <span className="step-kicker">Step 3 of 3</span>
         <h1 className="text-3xl font-extrabold text-foreground">Review & Confirm</h1>
         <p className="mt-2 text-muted-foreground">
-          Step 4 of 4: Review your configuration and generate the exam
+          Step 3 of 3: Review your configuration and generate the exam
         </p>
       </div>
 
@@ -167,7 +156,6 @@ export function ReviewConfirmationPage() {
         <div className="mt-2 flex justify-between text-xs text-muted-foreground">
           <span>Upload Files</span>
           <span>Question Types</span>
-          <span>Difficulty</span>
           <span className="font-semibold text-primary">Review</span>
         </div>
       </div>

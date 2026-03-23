@@ -1,226 +1,173 @@
-# Qreate 📚
+# Qreate
 
-**The AI-powered study tool that transforms your notes into realistic practice exams.**
+**Transform your study materials into realistic practice exams in minutes.**
 
-Stop feeling "ready" after reviewing notes only to struggle on the actual exam. Qreate bridges the gap between passive studying and exam confidence by generating professional practice tests from your study materials in seconds.
+![Electron](https://img.shields.io/badge/Electron-38+-47848F?logo=electron&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.4-38B2AC?logo=tailwind-css&logoColor=white)
+![SQLite](https://img.shields.io/badge/SQLite-better--sqlite3-003B57?logo=sqlite&logoColor=white)
 
-![Production Ready](https://img.shields.io/badge/Status-Production%20Ready-brightgreen)
-![Version](https://img.shields.io/badge/Version-0.1.0-blue)
-![License](https://img.shields.io/badge/License-MIT-yellow)
+## The Problem
 
-## 🎯 For Students Who Want Real Exam Practice
+Students study their notes, feel prepared, then freeze on the actual exam — because the experience of being tested is completely different from the experience of reviewing. Passive re-reading creates false confidence.
 
-**The Problem**: You study your notes, feel prepared, then freeze during the actual exam because it feels completely different.
+**Qreate solves this** by converting your notes or documents into professional, configurable practice exams. Upload a file, select question types and total question count, and get a formatted PDF in minutes — no ChatGPT cleanup, no formatting work, no manual question writing.
 
-**The Solution**: Qreate generates realistic practice exams from your study materials with customizable question types and difficulty levels - no manual setup, no formatting cleanup, just professional exam-quality practice in seconds.
+## Core Features
 
-### ❌ What Students Struggle With:
-- False confidence from passive note review
-- Time-consuming ChatGPT/AI interactions  
-- Poorly formatted quiz outputs with asterisks and broken PDFs
-- Manual copy-paste cleanup work
-- Disorganized question generation
+| Feature                  | Details                                                                                |
+| ------------------------ | -------------------------------------------------------------------------------------- |
+| AI exam generation       | Two-pass PFQS architecture: topic planning then question generation                    |
+| File ingestion           | Drag-and-drop `.txt` and `.docx` upload                                                |
+| Question types           | Multiple Choice, True/False, Fill in the Blanks, Short Answer                          |
+| Difficulty orchestration | Five-level difficulty logic (Very Easy → Very Hard) is embedded in generation pipeline |
+| PDF output               | Local generation via Electron's Chromium engine — no cloud needed                      |
+| Exam history             | Personal exam library with metadata stored in SQLite                                   |
+| Authentication           | Secure accounts with bcrypt hashing and session persistence                            |
+| Quota system             | 10/week, 3/day burst, 40/month — automatic weekly reset                                |
 
-### ✅ What Qreate Delivers:
-- **Lightning Fast**: Study material → practice exam in under 30 seconds
-- **Professional Quality**: Clean, formatted PDFs that look like real exams
-- **Completely Free**: No API keys, no subscriptions, no hidden costs
-- **Exam-Realistic**: Multiple question types with proper difficulty distribution
-- **Zero Cleanup**: Perfect formatting, no asterisks or manual editing
+## Demo
 
-## ✨ Production Features
+https://github.com/user-attachments/assets/REPLACE-WITH-VIDEO-ID
 
-### 🔐 **Complete Authentication System**
-- Secure user accounts with bcrypt password hashing
-- Session persistence across app restarts
-- Personal exam history and progress tracking
-- Data isolation - your exams stay private
+> Upload your `demo_final.mp4` via GitHub: edit this README on github.com, drag the mp4 into the text area, and GitHub will generate a permanent `user-attachments` URL. Replace the placeholder above with that URL.
 
-### 📁 **Smart File Processing**
-- **Drag-and-drop upload** for .txt and .docx files
-- **External file support** - drag files from anywhere on your computer
-- **Batch processing** - upload multiple study materials at once
-- **File validation** - automatic format checking and error handling
+## Architecture
 
-### 🤖 **AI-Powered Generation (100% Free)**
-- **Backend-managed Groq AI** - no API keys required from users
-- **Proven reliability** - 100% success rate with llama-3.3-70b-versatile
-- **Quality validation** - semantic deduplication and source verification
-- **Smart prompting** - eliminates formatting artifacts and repetitive questions
+```mermaid
+graph LR
+    subgraph Renderer["Renderer Process (React)"]
+        UI[Pages / Components]
+        ZS[Zustand Stores]
+        RR[React Router]
+    end
 
-### 📝 **Comprehensive Question Types**
-- **Multiple Choice** (4 options, smart distractor generation)
-- **True/False** (clear, unambiguous statements)
-- **Fill in the Blanks** (essential term identification)
-- **Short Answer** (concept explanation)
-- **Essay Questions** (critical thinking and analysis)
-- **Matching** (concept pairing)
-- **Identification** (term recognition)
+    subgraph Preload["Preload (IPC Bridge)"]
+        Bridge[window.electron API]
+    end
 
-### 🎯 **Smart Configuration**
-- **Custom difficulty distribution** (Very Easy → Very Hard)
-- **Flexible question counts** (10-100 questions per exam)
-- **Auto-suggestions** based on content analysis
-- **Quick presets** for common exam types
+    subgraph Main["Main Process (Node.js)"]
+        IPC[IPC Handlers]
+        PF[ProviderFactory]
+        TP[TogetherProvider]
+        Auth[AuthService]
+        DB[DatabaseService]
+        Usage[UsageTrackingService]
+        PDF[PDFGenerator]
+        FTE[FileTextExtractor]
+    end
 
-### 📄 **Professional PDF Export**
-- **Local generation** - no internet required for PDF creation
-- **Clean formatting** - exam content with separate answer key
-- **Professional layout** - looks like real institutional exams
-- **Automatic file organization** - saved to your Projects folder
-
-### 📊 **Usage Management**
-- **Fair quotas**: 10 exams/week, 3/day burst protection, 40/month
-- **Rate limiting**: 30-second delay between generations (quality protection)
-- **Usage tracking**: Monitor your exam generation history
-- **Weekly reset**: Flexible usage distribution throughout the week
-
-## 🛠️ Tech Stack
-
-**Desktop Framework**: Electron 38+ with multi-process architecture  
-**Frontend**: React 19 + TypeScript + Tailwind CSS  
-**State Management**: Zustand stores with persistent authentication  
-**Database**: SQLite with better-sqlite3 for local data storage  
-**AI Backend**: Groq SDK with llama-3.3-70b-versatile model  
-**Authentication**: bcrypt hashing with secure session management  
-**PDF Generation**: Electron's built-in Chromium printing  
-**File Processing**: Mammoth (.docx) + native Node.js (.txt)  
-
-## 🚀 Quick Start
-
-### Prerequisites
-- **Node.js 18+** and npm
-- **Git** for cloning the repository
-
-### Installation
-
-```bash
-# 1. Clone repository
-git clone https://github.com/j-dio/Qreate.git
-cd Qreate
-
-# 2. Install dependencies
-npm install
-
-# 3. Set up Groq API (free)
-cp .env.example .env.local
-# Edit .env.local and add your free Groq API key
-
-# 4. Start development
-npm run dev
+    UI --> Bridge --> IPC
+    IPC --> PF --> TP
+    IPC --> Auth --> DB
+    IPC --> Usage --> DB
+    IPC --> PDF
+    IPC --> FTE
 ```
 
-### 🔑 Free Groq API Setup (Required)
+**Process isolation:** The renderer has no direct access to Node.js, filesystem, or AI providers. All privileged operations flow through the preload IPC bridge as named handlers.
 
-1. **Sign up** at [console.groq.com](https://console.groq.com) (no credit card)
-2. **Generate API key** at [console.groq.com/keys](https://console.groq.com/keys)  
-3. **Add to `.env.local`**:
-   ```bash
-   GROQ_API_KEY=gsk_your_actual_api_key_here
-   ```
+## Technical Decisions
 
-> 💡 **Why Groq?** 14,400 free requests/day, 100% success rate, 3x faster than ChatGPT, designed for high-quality text generation.
+### Why Electron?
 
-### ⚙️ Development Commands
+Desktop-first lets the app own PDF generation locally (via Chromium's print engine), read files from disk without upload friction, and manage SQLite-backed local accounts/sessions and exam history — all without a backend server or user account on an external service.
+
+### Why Zustand?
+
+Four focused stores (`useAppStore`, `useFileUploadStore`, `useExamConfigStore`, `useExamGenerationStore`) map directly to the four stages of the exam creation workflow. Zustand's minimal API keeps store logic readable with no boilerplate.
+
+### Why two-pass generation?
+
+Single-pass prompting forces the model to simultaneously plan topics, craft questions, balance difficulty, and distribute answer positions. In earlier baseline tests of the old single-pass flow, this caused repetition and shallow coverage. The two-pass PFQS architecture separates concerns:
+
+- **Pass 1** (temperature 0.3, JSON mode): Extract unique concept assignments with Bloom's taxonomy levels and answer position targets. Zod-validated before proceeding.
+- **Pass 2** (temperature 0.5, text mode): Generate one question per concept using the plan as a strict contract.
+
+### Why Together AI + Groq fallback?
+
+Together AI's serverless Qwen3-235B endpoint delivers the reasoning capacity needed for consistent multi-concept extraction. Groq (`llama-3.3-70b-versatile`) is wired as an automatic fallback via the same OpenAI-compatible SDK—no code path change, just a different `baseURL`. Both providers require only an API key; no model hosting or infrastructure needed.
+
+### Why SQLite / better-sqlite3?
+
+Synchronous SQLite is the correct choice for a single-user desktop app. No connection pooling, no async ORM overhead, no separate database process. `better-sqlite3` provides a clean typed API with zero native-module build issues on Windows.
+
+## Production Notes
+
+**API key placement:** The current architecture loads `TOGETHER_API_KEY` from `.env.local` in the main process. For a multi-user or web deployment, move provider calls to a hosted backend so API keys are never distributed with the installer.
+
+**Migration path (desktop → hosted):**
+
+1. Extract `TogetherProvider` + `ProviderFactory` into a standalone Express/Fastify service
+2. Replace IPC handlers with `fetch()` calls to the hosted API
+3. Move auth/session management to the hosted service
+4. The renderer and preload bridge require minimal changes — only the IPC target changes
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js 18+
+- npm
+
+### Install
 
 ```bash
-npm run dev          # Development with hot reload
+git clone https://github.com/j-dio/Qreate.git
+cd Qreate
+npm install
+```
+
+### Environment setup
+
+```bash
+cp .env.example .env.local
+# Add your API keys — see .env.example for all options
+```
+
+**Together AI key (required):** [api.together.xyz/settings/api-keys](https://api.together.xyz/settings/api-keys)
+**Groq key (optional fallback):** [console.groq.com/keys](https://console.groq.com/keys)
+
+### Commands
+
+```bash
+npm run dev          # Start development (Electron + React hot reload)
+npm run typecheck    # TypeScript type checking
+npm run lint         # ESLint
+npm run format       # Prettier
 npm run build        # Production build
-npm run typecheck    # TypeScript validation
-npm run lint         # Code quality check
-npm run format       # Code formatting
 npm run package      # Create installer
 ```
 
-## 🎯 Current Status: Production Ready ✅
+## Tech Stack
 
-### Authentication System Complete
-- ✅ User registration and login
-- ✅ Secure password hashing and session management
-- ✅ Protected routes and automatic session restoration
-- ✅ Personal exam history with database integration
+| Category          | Technology                                                    |
+| ----------------- | ------------------------------------------------------------- |
+| Desktop framework | Electron 38                                                   |
+| Frontend          | React 19, React Router 7, TypeScript 5.9                      |
+| Styling           | Tailwind CSS 3.4                                              |
+| State management  | Zustand 5                                                     |
+| AI providers      | Together AI (Qwen3-235B), Groq (llama-3.3-70b) via OpenAI SDK |
+| Database          | SQLite via better-sqlite3                                     |
+| Authentication    | bcrypt, secure session tokens                                 |
+| PDF generation    | Electron Chromium printToPDF                                  |
+| File processing   | mammoth (.docx), Node.js fs (.txt)                            |
+| Validation        | Zod                                                           |
+| Build tooling     | electron-vite, Vite 7                                         |
 
-### Core Functionality Complete  
-- ✅ File upload with drag-and-drop support
-- ✅ AI exam generation with quality validation
-- ✅ Professional PDF generation and local storage
-- ✅ Usage quotas and rate limiting
-- ✅ Comprehensive error handling and user feedback
+## Future Plans
 
-### Quality Assurance Complete
-- ✅ Prompt engineering with literal instruction elimination
-- ✅ Semantic deduplication preventing repetitive questions
-- ✅ Source fidelity ensuring accuracy to study materials
-- ✅ Multi-LLM testing with 9.0/10+ quality scores
+**Platform migration:** Rebuild Qreate as a Progressive Web App (PWA) with a hosted backend, removing the Electron dependency and enabling mobile/tablet access. The existing `TogetherProvider` and validation pipeline are designed to lift directly into an Express or Fastify service.
 
-### Production Deployment Ready
-- ✅ Zero TypeScript compilation errors
-- ✅ Clean ESLint validation
-- ✅ Secure authentication with real user accounts
-- ✅ Database-backed exam history and usage tracking
-- ✅ Professional UI/UX with accessibility considerations
+**Stronger AI guardrails:** Continue iterating on the two-pass prompt architecture to improve True/False polarity balance, distractor quality for multiple choice, and Short Answer generation consistency. Explore structured output schemas and constrained decoding as alternatives to free-text prompting.
 
-## 🔮 Future Vision: Interactive Exam Mode
+**User configuration:** Give users more control over exam generation — model selection, temperature tuning, custom instructions passed to the AI, and per-question-type count targets instead of just a total question count.
 
-The next major milestone is transforming Qreate from a PDF generator into an **interactive exam simulator**:
+**Interactive exam mode:** Transform Qreate from a PDF generator into an interactive exam simulator with timed sessions, instant feedback, score tracking, and adaptive difficulty based on past performance.
 
-- 🖱️ **Clickable interfaces** - radio buttons, checkboxes, input fields
-- ⏱️ **Real-time timer** - simulate actual exam pressure
-- 📈 **Live feedback** - immediate scoring and explanations
-- 🎯 **Adaptive difficulty** - adjust based on performance
-- 📊 **Study analytics** - track improvement and weak areas
+**Study analytics:** Dashboard showing improvement trends, weak areas, topic mastery, and spaced-repetition recommendations based on exam history.
 
-This will make Qreate the definitive tool for students who want actual exam readiness, not just study confidence.
+## License
 
-## 📁 Project Structure
-
-```
-src/
-├── main/                    # Electron backend (Node.js)
-│   ├── index.ts            # IPC handlers and app lifecycle
-│   └── services/           # Core business logic
-│       ├── AuthService.ts      # User authentication
-│       ├── DatabaseService.ts  # SQLite data management  
-│       ├── GroqProvider.ts     # AI exam generation
-│       ├── PDFGenerator.ts     # Local PDF creation
-│       └── UsageTrackingService.ts # Quota management
-├── renderer/               # React frontend  
-│   ├── src/
-│   │   ├── pages/         # Route components
-│   │   ├── store/         # Zustand state management
-│   │   └── components/    # Reusable UI components
-├── preload/               # Secure IPC bridge
-│   └── index.ts          # Exposed APIs to frontend
-└── shared/               # Code shared between processes
-    ├── types/           # TypeScript definitions
-    └── services/        # Cross-process utilities
-```
-
-## 🤝 Contributing
-
-Qreate is designed to help students succeed. If you have ideas for improvements or find issues, please:
-
-1. **Check existing issues** to avoid duplicates
-2. **Create detailed bug reports** with steps to reproduce  
-3. **Suggest features** that enhance the student study experience
-4. **Follow the code style** established in the project
-
-See [CLAUDE.md](./CLAUDE.md) for detailed development guidelines and architecture notes.
-
-## 📊 Why Students Choose Qreate
-
-**Speed**: Study materials → practice exam in under 30 seconds  
-**Quality**: Professional formatting without manual cleanup  
-**Realism**: Exam-like experience that builds actual confidence  
-**Intelligence**: AI-powered recommendations and quality validation  
-**Convenience**: One-click workflow from upload to practice test  
-
-**Mission**: Make students actually exam-ready, not just study-confident.
-
-## 📄 License
-
-MIT License - see [LICENSE](./LICENSE) file for details.
-
----
-
-**Made with ❤️ for students who want to ace their exams, not just feel ready for them.**
+MIT — see [LICENSE](./LICENSE) for details.
