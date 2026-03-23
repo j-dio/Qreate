@@ -29,9 +29,9 @@ Students study their notes, feel prepared, then freeze on the actual exam — be
 
 ## Demo
 
-Demo GIF placeholder: `./docs/demo.gif`
+https://github.com/user-attachments/assets/REPLACE-WITH-VIDEO-ID
 
-Watch full demo (2 min): `link-here`
+> Upload your `demo_final.mp4` via GitHub: edit this README on github.com, drag the mp4 into the text area, and GitHub will generate a permanent `user-attachments` URL. Replace the placeholder above with that URL.
 
 ## Architecture
 
@@ -155,6 +155,18 @@ npm run package      # Create installer
 | File processing   | mammoth (.docx), Node.js fs (.txt)                            |
 | Validation        | Zod                                                           |
 | Build tooling     | electron-vite, Vite 7                                         |
+
+## Future Plans
+
+**Platform migration:** Rebuild Qreate as a Progressive Web App (PWA) with a hosted backend, removing the Electron dependency and enabling mobile/tablet access. The existing `TogetherProvider` and validation pipeline are designed to lift directly into an Express or Fastify service.
+
+**Stronger AI guardrails:** Continue iterating on the two-pass prompt architecture to improve True/False polarity balance, distractor quality for multiple choice, and Short Answer generation consistency. Explore structured output schemas and constrained decoding as alternatives to free-text prompting.
+
+**User configuration:** Give users more control over exam generation — model selection, temperature tuning, custom instructions passed to the AI, and per-question-type count targets instead of just a total question count.
+
+**Interactive exam mode:** Transform Qreate from a PDF generator into an interactive exam simulator with timed sessions, instant feedback, score tracking, and adaptive difficulty based on past performance.
+
+**Study analytics:** Dashboard showing improvement trends, weak areas, topic mastery, and spaced-repetition recommendations based on exam history.
 
 ## License
 

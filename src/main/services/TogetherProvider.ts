@@ -275,7 +275,7 @@ export class TogetherProvider {
     const antiLazinessRules = [mcPriorityRule, balanceRule].filter(Boolean).join('\n')
 
     const systemPrompt =
-      'You are an expert educational assessment planner. Output valid JSON only. Do not include markdown or code fences.'
+      'You are an expert educational assessment planner who extracts testable claims from source material. Every concept you extract must be a specific, declarative factual claim directly stated in the source — never a bare topic label. Output valid JSON only. Do not include markdown or code fences.'
 
     // Detect multi-source input and compute per-document concept budgets
     const sourceSections = this.parseSourceSections(sourceText)
@@ -293,7 +293,22 @@ Even if a document is very short, extract at least ${minPerDoc} concept(s) from 
 `
     }
 
-    const userPrompt = `Analyze the following source material and extract UP TO ${totalQuestions} unique concepts for a practice exam.
+    const userPrompt = `Analyze the following source material and extract UP TO ${totalQuestions} unique testable claims for a practice exam.
+
+CRITICAL: WHAT IS A "CONCEPT"?
+A concept is NOT a topic label like "Metastasis" or "Cell Division". A concept IS a specific, testable factual claim that is explicitly stated in the source material.
+
+BAD examples (vague topic labels — NEVER do this):
+  - "Metastasis"
+  - "Cell cycle regulation"
+  - "Types of neoplasia"
+
+GOOD examples (specific declarative claims anchored to source):
+  - "Metastasis to the liver is the most common site for colorectal cancer spread"
+  - "CDK inhibitors like p21 halt the cell cycle at the G1/S checkpoint"
+  - "Benign neoplasms are well-differentiated and encapsulated, while malignant neoplasms show anaplasia and invasion"
+
+Each concept string must be a complete sentence or specific claim that someone could verify by reading the source material. If you cannot point to the specific passage in the source that supports the claim, do not include it.
 
 ALLOWED QUESTION TYPES (assign whichever fits each concept best):
 ${allowedTypeLines}
@@ -302,12 +317,14 @@ DIFFICULTY DISTRIBUTION (3-level, scale down proportionally if fewer concepts ar
 ${diffLines}
 ${multiSourceBlock}
 REQUIREMENTS:
+- Each concept must be a SPECIFIC FACTUAL CLAIM from the source — a declarative sentence, not a topic name.
 - Each concept must be COMPLETELY DISTINCT — no overlap between concepts.
 - Assign each concept exactly one question type from the ALLOWED list above (choose whichever type best suits that concept), one difficulty level, and one Bloom's taxonomy level.
 - For multipleChoice concepts, assign an "answerPosition" field (A, B, C, or D) cycling evenly to prevent answer bias.
 - Do NOT repeat any concept. Do NOT assign the same topic to multiple questions.
 - Each concept must be unique to its assigned question type. Do NOT plan a concept for trueFalse if the same factual claim already appears under multipleChoice or any other type.
 - Concepts must be extracted ONLY from the source material provided. NEVER invent or add concepts from outside the source material to reach the target count. If the material only supports 15 or 30 distinct concepts, output only that many.
+- For trueFalse concepts: the claim you write here is the TRUE version of the fact. Pass 2 will decide whether to present it as-is (True) or alter a detail to make it False.
 
 ${antiLazinessRules}
 
@@ -316,8 +333,9 @@ OUTPUT FORMAT (JSON only):
   "topic": "Detected subject/topic from the material",
   "totalConcepts": <actual number of concepts extracted>,
   "concepts": [
-    { "id": 1, "concept": "Specific concept name", "type": "multipleChoice", "difficulty": "moderate", "bloomLevel": "understand", "answerPosition": "A" },
-    { "id": 2, "concept": "Another specific concept", "type": "trueFalse", "difficulty": "easy", "bloomLevel": "remember" },
+    { "id": 1, "concept": "The TNM staging system uses tumor size (T), lymph node involvement (N), and distant metastasis (M) to classify cancer severity", "type": "multipleChoice", "difficulty": "moderate", "bloomLevel": "understand", "answerPosition": "A" },
+    { "id": 2, "concept": "Benign tumors grow by expansion and are typically encapsulated", "type": "trueFalse", "difficulty": "easy", "bloomLevel": "remember" },
+    { "id": 3, "concept": "Anaplasia refers to the lack of cellular differentiation seen in malignant tumors", "type": "fillInTheBlanks", "difficulty": "moderate", "bloomLevel": "remember" },
     ...
   ]
 }
@@ -517,7 +535,7 @@ ${sourceText.slice(0, 80000)}`
     ].join('\n')
 
     const systemPrompt =
-      "You are an expert exam question writer. Generate exactly one question per concept in the provided plan. You must follow the assigned 'type' and 'answerPosition' fields for every concept without exception."
+      "You are an expert exam question writer who creates challenging, realistic assessments. For multiple choice: every distractor must be a plausible answer that a student who partially studied might choose — never use obviously wrong or vague filler options. For true/false: you MUST produce a mix of True and False statements — approximately half should be False, created by altering one specific detail of a true fact. Follow the assigned 'type' and 'answerPosition' fields for every concept without exception."
 
     const userPrompt = `Generate exam questions from the topic plan below. Every rule below is MANDATORY.
 
@@ -530,13 +548,23 @@ ${typeRuleLines.join('\n')}
    Do NOT change a concept's type.
 
 3. TRUE/FALSE VARIANCE (CRITICAL — generation will be REJECTED if violated):
-   - You MUST write both True AND False statements. Do NOT default to all True.
-   - To write a False statement: take a real fact from the source, then change one specific detail to make it incorrect. Example: if source says "Mitochondria produce ATP", write "Mitochondria produce NADH as their primary energy output" and mark it False.
 ${
   tfCount > 0
-    ? `   - Target: exactly ${targetFalseCount} False and ${targetTrueCount} True out of ${tfCount} T/F questions.
-   - The validator WILL reject your output if fewer than ${Math.max(1, Math.floor(tfCount * 0.1))} of either polarity exist.`
-    : '   - This plan contains 0 trueFalse questions. Do not create any trueFalse items.'
+    ? `   BEFORE writing any T/F questions, you must first plan which ones will be False.
+   Out of ${tfCount} T/F questions, exactly ${targetFalseCount} MUST be False and ${targetTrueCount} MUST be True.
+
+   STEP-BY-STEP PROCESS FOR T/F:
+   a) Look at all ${tfCount} trueFalse concepts in the plan. Each concept contains a TRUE factual claim from the source.
+   b) Select exactly ${targetFalseCount} of those concepts to convert into FALSE statements.
+   c) For each selected False concept: take the true claim and change exactly ONE specific detail to make it factually wrong.
+      - Change a number, a name, a location, a process name, or a cause-effect relationship.
+      - The alteration must be subtle enough that a student who didn't study would believe it.
+      - Example: True claim "CDK inhibitors halt the cell cycle at G1/S" → False statement: "CDK inhibitors halt the cell cycle at the G2/M checkpoint" (changed which checkpoint).
+   d) For the remaining ${targetTrueCount} concepts: present the true claim as a clear, direct statement. Answer: True.
+   e) The validator WILL reject your output if fewer than ${Math.max(1, Math.floor(tfCount * 0.1))} of either polarity exist.
+
+   COMMON MISTAKE TO AVOID: Do NOT write all statements as true facts and mark them all "True". You MUST deliberately introduce factual errors into exactly ${targetFalseCount} statements.`
+    : '   This plan contains 0 trueFalse questions. Do not create any trueFalse items.'
 }
 
 4. ANSWER PLACEMENT FOR MULTIPLE CHOICE: Every multiple choice concept in the plan has an "answerPosition" field set to "A", "B", "C", or "D". This field tells you exactly which option letter MUST contain the correct answer.
@@ -546,15 +574,27 @@ ${
    - answerPosition "D" → Option D is correct; A, B, C are wrong distractors.
    You MUST honor every answerPosition exactly. Never put the correct answer at a different letter.
 
-5. CONTENT: Base every question ONLY on the source material. Do NOT use "All of the above" as an option. Do NOT repeat concepts.
+5. MULTIPLE CHOICE DISTRACTOR QUALITY (CRITICAL):
+   Every distractor (wrong option) must be:
+   - A real term, concept, or value from the same domain that a partially-prepared student might confuse with the correct answer.
+   - Similar in length, specificity, and grammatical structure to the correct answer.
+   - NEVER use vague fillers like "None of the above", "All of the above", "Some cells", or "Various factors".
+   - NEVER make distractors obviously wrong through vague language while the correct answer uses precise terminology.
+   - Each distractor should represent a common misconception or a plausible alternative from the source material.
+   Example — GOOD distractors for "Which phase involves DNA replication?" (answer: S phase):
+     A) G1 phase  B) S phase  C) G2 phase  D) M phase  ← all are real cell cycle phases
+   Example — BAD distractors:
+     A) Some phase  B) S phase  C) The dividing part  D) None of these  ← vague, obviously wrong
 
-6. GROUPING: Group ALL questions of the same type under ONE section header. Write each header exactly once.
+6. CONTENT: Base every question ONLY on the source material. Do NOT repeat concepts.
 
-7. NUMBERING: Number every question sequentially from 1 to ${plan.concepts.length} top-to-bottom. Ignore the "id" field in the plan — it is internal only.
+7. GROUPING: Group ALL questions of the same type under ONE section header. Write each header exactly once.
 
-8. CRITICAL FORMATTING: NEVER place the answers immediately after the questions in the main body. The question sections must contain ONLY the questions and the multiple choice options. ALL answers must be strictly hidden and reserved ONLY for the ----Answer Key---- section at the very bottom.
+8. NUMBERING: Number every question sequentially from 1 to ${plan.concepts.length} top-to-bottom. Ignore the "id" field in the plan — it is internal only.
 
-9. ANSWER KEY: List every answer using the sequential question number (e.g., "1. A", "2. True"). Plain text list only — no markdown table.
+9. CRITICAL FORMATTING: NEVER place the answers immediately after the questions in the main body. The question sections must contain ONLY the questions and the multiple choice options. ALL answers must be strictly hidden and reserved ONLY for the ----Answer Key---- section at the very bottom.
+
+10. ANSWER KEY: List every answer using the sequential question number (e.g., "1. A", "2. True"). Plain text list only — no markdown table.
 
 OUTPUT FORMAT:
 ${dynamicOutputFormat}
@@ -609,13 +649,15 @@ ${sourceText.slice(0, 80000)}`
       for (let attempt = 0; attempt <= 2; attempt++) {
         try {
           const raw = await this.generateFromPlan(client, plan, config, sourceText)
-          // Programmatically correct MC answer key entries before validation.
-          // The model reliably places correct answers at the right option position
-          // but frequently writes the wrong letter in the answer key (~30% drift).
-          // Since answerPosition is ground truth from Pass 1, we override the key.
-          const corrected = fixMCAnswerKeys(raw, plan)
+          // NOTE: fixMCAnswerKeys is disabled. The original assumption — that the model
+          // reliably places answers at the instructed answerPosition but writes the wrong
+          // letter in the key — was proven false. In practice the model ignores
+          // answerPosition ~40% of the time, placing the correct answer wherever it wants
+          // but writing the CORRECT letter in its own answer key. Overwriting the key with
+          // answerPosition then points to the WRONG option, corrupting ~40% of MC answers.
+          // The model's own answer key is more reliable than the forced override.
           const result = validatePass2OutputStandalone(
-            corrected,
+            raw,
             plan,
             targetTrueCount,
             targetFalseCount
@@ -623,7 +665,7 @@ ${sourceText.slice(0, 80000)}`
           attemptsLog.push({ client: name, attempt, violations: result.violations })
           if (result.valid) {
             this.lastUsedProvider = name
-            return corrected
+            return raw
           }
           console.error(
             `[TogetherProvider] Pass 2 attempt ${attempt + 1} (${name}) failed validation:`,
@@ -1062,48 +1104,10 @@ export function validatePass2OutputStandalone(
     }
   }
 
-  // MC answer-key spot-check: verify each MC question's answer key letter matches plan's answerPosition
-  const mcConcepts = plan.concepts.filter(c => c.type === 'multipleChoice')
-  if (mcConcepts.length > 0 && answerKeyStart !== -1) {
-    const mcHeader = SECTION_HEADERS['multipleChoice']
-    const mcBodyStart = normalized.indexOf(mcHeader)
-    if (mcBodyStart !== -1) {
-      const mcSearchFrom = mcBodyStart + mcHeader.length
-      const mcOtherBoundaries = [
-        ...Object.values(SECTION_HEADERS).filter(h => h !== mcHeader),
-        ANSWER_KEY_MARKER,
-      ]
-        .map(h => normalized.indexOf(h, mcSearchFrom))
-        .filter(i => i > mcBodyStart)
-      const mcBodyEnd =
-        mcOtherBoundaries.length > 0 ? Math.min(...mcOtherBoundaries) : normalized.length
-      const mcBodySlice = normalized.slice(mcSearchFrom, mcBodyEnd)
-      const mcQuestionNumbers = [...mcBodySlice.matchAll(/^(\d+)\. /gm)].map(m =>
-        parseInt(m[1], 10)
-      )
-
-      // Map each MC question number to its plan concept (by order of appearance)
-      const answerKeySliceForMC = normalized.slice(answerKeyStart)
-      let mismatchCount = 0
-      for (let i = 0; i < Math.min(mcQuestionNumbers.length, mcConcepts.length); i++) {
-        const qNum = mcQuestionNumbers[i]
-        const expectedLetter = mcConcepts[i].answerPosition
-        if (!expectedLetter) continue
-        // Extract the answer key entry for this question number
-        const akMatch = answerKeySliceForMC.match(new RegExp(`^${qNum}\\.\\s+([A-D])`, 'm'))
-        if (akMatch && akMatch[1] !== expectedLetter) {
-          mismatchCount++
-        }
-      }
-      // Allow up to 20% mismatch tolerance (model may slightly drift)
-      const maxAllowed = Math.max(1, Math.floor(mcConcepts.length * 0.2))
-      if (mismatchCount > maxAllowed) {
-        violations.push(
-          `MC answer-key mismatch: ${mismatchCount}/${mcQuestionNumbers.length} MC answers don't match planned answerPosition (max allowed: ${maxAllowed})`
-        )
-      }
-    }
-  }
+  // MC answer-key spot-check DISABLED.
+  // The model ignores answerPosition ~40% of the time, placing correct answers wherever
+  // it wants. Checking the key against the plan's answerPosition would flag correct keys
+  // as violations. The model's own answer key is trusted over the plan's answerPosition.
 
   return { valid: violations.length === 0, violations }
 }
