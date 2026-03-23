@@ -4,7 +4,7 @@
  * Phase 2, Step 4: Final review before exam generation
  *
  * User Flow:
- * 1. User arrives from Difficulty Distribution
+ * 1. User arrives from Exam Type Selection
  * 2. Review all configuration settings
  * 3. See estimated processing time and API usage
  * 4. Can edit any section by clicking Edit buttons
@@ -102,7 +102,6 @@ export function ReviewConfirmationPage() {
       navigate('/create-exam/types')
       return
     }
-
   }, [uploadedFiles, totalQuestions, navigate])
 
   // Calculate estimates for Together AI backend (Qwen3-235B two-pass is slow — ~1 min per 15 questions)

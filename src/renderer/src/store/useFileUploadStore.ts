@@ -58,9 +58,9 @@ export interface UploadedFile {
  * - Images not yet supported (OCR planned for future)
  */
 export const VALIDATION_RULES = {
-  MAX_FILES: 5, // Maximum number of files
-  MAX_FILE_SIZE: 50 * 1024 * 1024, // 50MB per file in bytes
-  MAX_TOTAL_SIZE: 200 * 1024 * 1024, // 200MB total in bytes
+  MAX_FILES: 3, // Maximum number of files
+  MAX_FILE_SIZE: 20 * 1024 * 1024, // 20MB per file in bytes
+  MAX_TOTAL_SIZE: 60 * 1024 * 1024, // 60MB total in bytes
   ALLOWED_TYPES: {
     // Only text and modern Word documents
     'text/plain': ['txt'],

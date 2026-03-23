@@ -8,8 +8,7 @@
  * Phase 2: Exam Configuration
  *   → Step 1: File Upload ✓
  *   → Step 2: Exam Type Selection (THIS PAGE)
- *   → Step 3: Difficulty Distribution (Next)
- *   → Step 4: Review & Confirmation (Coming)
+ *   → Step 3: Review & Confirmation (Next)
  * Phase 3: Exam Generation
  *
  * Features:
@@ -51,7 +50,7 @@ export function ExamTypeSelectionPage() {
   }
 
   /**
-   * Handle proceeding to difficulty distribution
+   * Handle proceeding to review and confirmation
    */
   const handleNext = () => {
     if (!canProceed) return
@@ -95,9 +94,7 @@ export function ExamTypeSelectionPage() {
               <li>
                 Use <strong>Quick Presets</strong> for common exam configurations
               </li>
-              <li>
-                Check multiple types — the AI picks the best fit for each concept automatically
-              </li>
+              <li>Check multiple types—the AI picks the best fit for each concept automatically</li>
               <li>Total cap must be between 10–50 questions</li>
               <li>At least one question type must be selected</li>
             </ul>

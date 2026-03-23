@@ -61,7 +61,7 @@ export function ExamGenerationProgressPage() {
       navigate('/create-exam')
       return
     }
-    // No need to check API keys with Groq backend - it's managed server-side
+    // No need to check user API keys - provider access is managed server-side
   }, [user, uploadedFiles, totalQuestions, navigate])
 
   const handleStartGeneration = useCallback(async () => {
@@ -153,7 +153,7 @@ export function ExamGenerationProgressPage() {
         stage: 'generating_exam',
       })
 
-      // Generate exam with Groq backend
+      // Generate exam with backend AI provider
       const config = {
         questionTypes,
         difficultyDistribution,

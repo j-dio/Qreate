@@ -339,7 +339,7 @@ export function FileUploadZone() {
                   {uploadedFiles.length} / {rules.maxFiles} files selected
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Total size: {(totalSize / (1024 * 1024)).toFixed(2)} MB / 200 MB
+                  Total size: {(totalSize / (1024 * 1024)).toFixed(2)} MB / {rules.maxTotalSize}
                 </p>
               </div>
             </div>

@@ -7,7 +7,7 @@
  * - List of recent projects
  * - Create new exam button
  * - Project statistics
- * - Usage quota display (Groq backend)
+ * - Usage quota display (backend AI service)
  */
 
 import { Plus, FileText, Gauge, CalendarClock, Hash, ArrowUpRight } from 'lucide-react'

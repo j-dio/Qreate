@@ -8,8 +8,7 @@
  * Phase 2: Exam Configuration
  *   → Step 1: File Upload (THIS PAGE)
  *   → Step 2: Exam Type Selection (Coming next)
- *   → Step 3: Difficulty Distribution (Coming next)
- *   → Step 4: Review & Confirmation (Coming next)
+ *   → Step 3: Review & Confirmation (Coming next)
  * Phase 3: Exam Generation
  * Phase 4: Document Creation
  *

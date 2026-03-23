@@ -72,7 +72,7 @@ graph LR
 
 ### Why Electron?
 
-Desktop-first lets the app own PDF generation locally (via Chromium's print engine), read files from disk without upload friction, and manage a local SQLite database — all without a backend server or user account on an external service.
+Desktop-first lets the app own PDF generation locally (via Chromium's print engine), read files from disk without upload friction, and manage SQLite-backed local accounts/sessions and exam history — all without a backend server or user account on an external service.
 
 ### Why Zustand?
 
@@ -80,14 +80,14 @@ Four focused stores (`useAppStore`, `useFileUploadStore`, `useExamConfigStore`, 
 
 ### Why two-pass generation?
 
-Single-pass prompting forces the model to simultaneously plan topics, craft questions, balance difficulty, and distribute answer positions — leading to repetition and shallow coverage (3/10 quality in production testing). The two-pass PFQS architecture separates concerns:
+Single-pass prompting forces the model to simultaneously plan topics, craft questions, balance difficulty, and distribute answer positions. In earlier baseline tests of the old single-pass flow, this caused repetition and shallow coverage. The two-pass PFQS architecture separates concerns:
 
 - **Pass 1** (temperature 0.3, JSON mode): Extract unique concept assignments with Bloom's taxonomy levels and answer position targets. Zod-validated before proceeding.
 - **Pass 2** (temperature 0.5, text mode): Generate one question per concept using the plan as a strict contract.
 
 ### Why Together AI + Groq fallback?
 
-Together AI's serverless Qwen3-235B endpoint delivers the reasoning capacity needed for consistent multi-concept extraction. Groq (`llama-3.3-70b-versatile`) is wired as an automatic fallback via the same OpenAI-compatible SDK — no code path change, just a different `baseURL`. Both providers require only an API key; no model hosting or infrastructure needed.
+Together AI's serverless Qwen3-235B endpoint delivers the reasoning capacity needed for consistent multi-concept extraction. Groq (`llama-3.3-70b-versatile`) is wired as an automatic fallback via the same OpenAI-compatible SDK—no code path change, just a different `baseURL`. Both providers require only an API key; no model hosting or infrastructure needed.
 
 ### Why SQLite / better-sqlite3?
 

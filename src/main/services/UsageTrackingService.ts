@@ -1,19 +1,19 @@
 /**
  * Usage Tracking Service
  *
- * Enforces per-user quotas for exam generation using Groq backend.
+ * Enforces per-user quotas for exam generation using the backend AI provider.
  *
  * User Limits (Free Tier):
  * - 10 exams per week
  * - 3 exams per day (burst protection)
  * - 40 exams per month
- * - 10-100 questions per exam
+ * - 10-50 questions per exam
  * - 30 seconds between exam generations (rate limiting)
  *
  * Why quotas?
  * - Prevents abuse of free backend service
  * - Ensures fair usage across all users
- * - Protects against hitting Groq's API limits
+ * - Protects against hitting provider API limits
  * - Sustainable for free tier offering
  *
  * Implementation:
@@ -68,7 +68,7 @@ export class UsageTrackingService {
       dailyBurstLimit: parseInt(process.env.DAILY_BURST_LIMIT || '3'),
       examsPerMonth: parseInt(process.env.MAX_EXAMS_PER_MONTH || '40'),
       minQuestionsPerExam: parseInt(process.env.MIN_QUESTIONS_PER_EXAM || '10'),
-      maxQuestionsPerExam: parseInt(process.env.MAX_QUESTIONS_PER_EXAM || '100'),
+      maxQuestionsPerExam: parseInt(process.env.MAX_QUESTIONS_PER_EXAM || '50'),
       rateLimitDelaySeconds: parseInt(process.env.RATE_LIMIT_DELAY_SECONDS || '30'),
     }
 

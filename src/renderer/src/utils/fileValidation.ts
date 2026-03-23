@@ -10,10 +10,10 @@
  * - Clear error messages: User-friendly feedback
  *
  * Validation Rules (from CLAUDE.md):
- * - Max 5 files total
- * - Max 50MB per file
- * - Max 200MB total
- * - Allowed types: PDF, DOCX, DOC, TXT, PNG, JPG
+ * - Max 3 files total
+ * - Max 20MB per file
+ * - Max 60MB total
+ * - Allowed types: DOCX, TXT
  */
 
 import { VALIDATION_RULES } from '../store/useFileUploadStore'
@@ -33,10 +33,10 @@ export interface ValidationResult {
  * Examples:
  * - formatBytes(1024) => "1 KB"
  * - formatBytes(1048576) => "1 MB"
- * - formatBytes(52428800) => "50 MB"
+ * - formatBytes(20971520) => "20 MB"
  *
  * Why this is useful:
- * - Users understand "50 MB" better than "52428800 bytes"
+ * - Users understand "20 MB" better than "20971520 bytes"
  * - Consistent formatting across the app
  */
 export function formatBytes(bytes: number, decimals: number = 2): string {
@@ -110,7 +110,7 @@ export function isFileTypeAllowed(file: File): ValidationResult {
 /**
  * Check if file size is within limit
  *
- * Validates individual file size (max 50MB per file)
+ * Validates individual file size (max 20MB per file)
  */
 export function isFileSizeValid(file: File): ValidationResult {
   if (file.size > VALIDATION_RULES.MAX_FILE_SIZE) {
@@ -126,7 +126,7 @@ export function isFileSizeValid(file: File): ValidationResult {
 /**
  * Check if total size is within limit
  *
- * Validates cumulative size of all files (max 200MB total)
+ * Validates cumulative size of all files (max 60MB total)
  *
  * Parameters:
  * - currentTotalSize: Size of already uploaded files
@@ -149,7 +149,7 @@ export function isTotalSizeValid(currentTotalSize: number, newFiles: File[]): Va
 /**
  * Check if we can add more files
  *
- * Validates against the maximum file count (5 files)
+ * Validates against the maximum file count (3 files)
  */
 export function canAddMoreFiles(currentCount: number, newFilesCount: number): ValidationResult {
   const totalCount = currentCount + newFilesCount
@@ -213,7 +213,7 @@ export function validateFiles(
 /**
  * Get a user-friendly description of allowed file types
  *
- * Returns: "PDF, DOCX, DOC, TXT, PNG, JPG"
+ * Returns: "TXT, DOCX"
  */
 export function getAllowedFileTypesDescription(): string {
   const extensions = Object.values(VALIDATION_RULES.ALLOWED_TYPES)
