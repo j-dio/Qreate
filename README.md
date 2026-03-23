@@ -1,3 +1,5 @@
+
+https://github.com/user-attachments/assets/cda22235-c19f-4ff8-bc6c-6baba2cd87a0
 # Qreate
 
 **Transform your study materials into realistic practice exams in minutes.**
@@ -29,8 +31,7 @@ Students study their notes, feel prepared, then freeze on the actual exam — be
 
 ## Demo
 
-https://github.com/user-attachments/assets/[REPLACE-WITH-VIDEO-ID
-](https://github.com/user-attachments/assets/20c73652-8413-4bf1-a78b-35a1943c2f29)
+https://github.com/user-attachments/assets/f2a48f38-2a4e-43b5-a0f8-e5c5255faeef
 
 ## Architecture
 
