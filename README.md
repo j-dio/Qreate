@@ -1,5 +1,3 @@
-
-https://github.com/user-attachments/assets/cda22235-c19f-4ff8-bc6c-6baba2cd87a0
 # Qreate
 
 **Transform your study materials into realistic practice exams in minutes.**
