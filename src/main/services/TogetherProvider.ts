@@ -260,6 +260,22 @@ export class TogetherProvider {
     const systemPrompt =
       'You are an expert educational assessment planner. Output valid JSON only. Do not include markdown or code fences.'
 
+    // Detect multi-source input and compute per-document concept budgets
+    const sourceSections = this.parseSourceSections(sourceText)
+    let multiSourceBlock = ''
+    if (sourceSections && sourceSections.length >= 2) {
+      const budgets = this.computeSourceBudgets(sourceSections, totalQuestions)
+      const minPerDoc = Math.max(1, Math.min(3, Math.floor(totalQuestions / sourceSections.length)))
+      multiSourceBlock = `
+MULTI-SOURCE DISTRIBUTION (MANDATORY — enforced before any other rule):
+The source material contains ${sourceSections.length} separate documents, each marked by "=== SOURCE N: name ===".
+You MUST extract concepts from EVERY document. Do NOT exhaust the concept limit on the first document.
+Per-document concept targets (extract approximately this many from each):
+${sourceSections.map((s, i) => `  - Source ${i + 1} "${s.name}": ~${budgets[i]} concept(s)`).join('\n')}
+Even if a document is very short, extract at least ${minPerDoc} concept(s) from it.
+`
+    }
+
     const userPrompt = `Analyze the following source material and extract UP TO ${totalQuestions} unique concepts for a practice exam.
 
 ALLOWED QUESTION TYPES (assign whichever fits each concept best):
@@ -267,7 +283,7 @@ ${allowedTypeLines}
 
 DIFFICULTY DISTRIBUTION (3-level, scale down proportionally if fewer concepts are available):
 ${diffLines}
-
+${multiSourceBlock}
 REQUIREMENTS:
 - Each concept must be COMPLETELY DISTINCT — no overlap between concepts.
 - Assign each concept exactly one question type from the ALLOWED list above (choose whichever type best suits that concept), one difficulty level, and one Bloom's taxonomy level.
@@ -458,6 +474,58 @@ ${sourceText.slice(0, 80000)}`
       positions.push(...this.shuffleArray(base))
     }
     return positions.slice(0, count)
+  }
+
+  // ----------------------------------------------------------
+  // Multi-source helpers
+  // ----------------------------------------------------------
+
+  /**
+   * Detect structured source markers written by the renderer.
+   * Format: "=== SOURCE N: filename ==="
+   *
+   * Returns an array of {name, text} when two or more sources are found,
+   * or null for a single-source (unmarked) string.
+   */
+  private parseSourceSections(
+    sourceText: string
+  ): Array<{ name: string; text: string }> | null {
+    const markerRegex = /^=== SOURCE \d+: (.+) ===/gm
+    const matches = [...sourceText.matchAll(markerRegex)]
+
+    if (matches.length < 2) return null
+
+    return matches.map((match, i) => {
+      const start = (match.index ?? 0) + match[0].length
+      const end =
+        i + 1 < matches.length ? matches[i + 1].index ?? sourceText.length : sourceText.length
+      return {
+        name: match[1].trim(),
+        text: sourceText.slice(start, end).trim(),
+      }
+    })
+  }
+
+  /**
+   * Compute per-document concept budgets so that Pass 1 draws proportionally
+   * from every uploaded file, not just the largest one.
+   *
+   * Budget formula:  max(minPerDoc, round(total × charLen / totalChars))
+   * minPerDoc:       max(1, min(3, floor(total / numDocs)))
+   *
+   * The minimum floor prevents tiny documents (e.g. a 2-paragraph summary)
+   * from being completely eclipsed by a dense companion document.
+   */
+  private computeSourceBudgets(
+    sections: Array<{ name: string; text: string }>,
+    totalQuestions: number
+  ): number[] {
+    const totalChars = sections.reduce((sum, s) => sum + s.text.length, 0)
+    const minPerDoc = Math.max(1, Math.min(3, Math.floor(totalQuestions / sections.length)))
+
+    return sections.map(s =>
+      Math.max(minPerDoc, Math.round(totalQuestions * (s.text.length / totalChars)))
+    )
   }
 
   // ----------------------------------------------------------

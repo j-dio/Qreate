@@ -141,8 +141,14 @@ export function ExamGenerationProgressPage() {
         }
       }
 
-      // Combine all file texts
-      const combinedText = fileTexts.join('\n\n')
+      // Combine all file texts with explicit source markers so the AI can see document boundaries.
+      // Single-file uploads pass the text directly (no markers needed).
+      const combinedText =
+        fileTexts.length === 1
+          ? fileTexts[0]
+          : fileTexts
+              .map((text, i) => `=== SOURCE ${i + 1}: ${uploadedFiles[i].name} ===\n${text}`)
+              .join('\n\n')
 
       // Update progress for AI generation
       updateProgress({
