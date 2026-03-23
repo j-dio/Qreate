@@ -609,8 +609,13 @@ ${sourceText.slice(0, 80000)}`
       for (let attempt = 0; attempt <= 2; attempt++) {
         try {
           const raw = await this.generateFromPlan(client, plan, config, sourceText)
+          // Programmatically correct MC answer key entries before validation.
+          // The model reliably places correct answers at the right option position
+          // but frequently writes the wrong letter in the answer key (~30% drift).
+          // Since answerPosition is ground truth from Pass 1, we override the key.
+          const corrected = fixMCAnswerKeys(raw, plan)
           const result = validatePass2OutputStandalone(
-            raw,
+            corrected,
             plan,
             targetTrueCount,
             targetFalseCount
@@ -618,7 +623,7 @@ ${sourceText.slice(0, 80000)}`
           attemptsLog.push({ client: name, attempt, violations: result.violations })
           if (result.valid) {
             this.lastUsedProvider = name
-            return raw
+            return corrected
           }
           console.error(
             `[TogetherProvider] Pass 2 attempt ${attempt + 1} (${name}) failed validation:`,
@@ -882,6 +887,75 @@ function countQuestionsInSection(
 
   const slice = normalized.slice(searchFrom, end)
   return (slice.match(/^\d+\. /gm) ?? []).length
+}
+
+/**
+ * Programmatically correct MC answer key entries to match the plan's answerPosition.
+ *
+ * The model reliably places the correct answer at the right option position in the
+ * question body but frequently writes the wrong letter in the answer key (~30% drift).
+ * Since answerPosition is ground truth (assigned deterministically via Fisher-Yates in
+ * Pass 1), we can override the answer key for every MC question rather than retrying.
+ *
+ * Algorithm:
+ * 1. Normalize output to find MC question numbers (same extraction as validator).
+ * 2. Pair mcQuestionNumbers[i] with mcConcepts[i].answerPosition.
+ * 3. Replace each MC answer key line in the raw text with the correct letter.
+ */
+export function fixMCAnswerKeys(raw: string, plan: TopicPlan): string {
+  const normalized = normalizePass2Output(raw)
+  const answerKeyStart = normalized.indexOf(ANSWER_KEY_MARKER)
+  if (answerKeyStart === -1) return raw
+
+  const mcConcepts = plan.concepts.filter(c => c.type === 'multipleChoice')
+  if (mcConcepts.length === 0) return raw
+
+  const mcHeader = SECTION_HEADERS['multipleChoice']
+  const mcBodyStart = normalized.indexOf(mcHeader)
+  if (mcBodyStart === -1) return raw
+
+  const mcSearchFrom = mcBodyStart + mcHeader.length
+  const mcOtherBoundaries = [
+    ...Object.values(SECTION_HEADERS).filter(h => h !== mcHeader),
+    ANSWER_KEY_MARKER,
+  ]
+    .map(h => normalized.indexOf(h, mcSearchFrom))
+    .filter(i => i > mcBodyStart)
+  const mcBodyEnd =
+    mcOtherBoundaries.length > 0 ? Math.min(...mcOtherBoundaries) : normalized.length
+  const mcBodySlice = normalized.slice(mcSearchFrom, mcBodyEnd)
+  const mcQuestionNumbers = [...mcBodySlice.matchAll(/^(\d+)\. /gm)].map(m => parseInt(m[1], 10))
+
+  // Build a map: question number → correct answer letter
+  const corrections = new Map<number, string>()
+  for (let i = 0; i < Math.min(mcQuestionNumbers.length, mcConcepts.length); i++) {
+    const letter = mcConcepts[i].answerPosition
+    if (letter) corrections.set(mcQuestionNumbers[i], letter)
+  }
+  if (corrections.size === 0) return raw
+
+  // Find the answer key delimiter in the raw text (case-insensitive variant)
+  const rawAkIdx = raw.search(/----[Aa]nswer [Kk]ey----/)
+  if (rawAkIdx === -1) return raw
+
+  // Split into body + answer key, fix answer key lines, then rejoin
+  const body = raw.slice(0, rawAkIdx)
+  const akSection = raw.slice(rawAkIdx)
+
+  const fixedAk = akSection
+    .split('\n')
+    .map(line => {
+      // Match "N. X" or "N) X" at the start of a line
+      const m = line.match(/^(\d+)[.)]\s+([A-D])\s*$/)
+      if (!m) return line
+      const qNum = parseInt(m[1], 10)
+      const correctLetter = corrections.get(qNum)
+      if (!correctLetter) return line
+      return `${m[1]}. ${correctLetter}`
+    })
+    .join('\n')
+
+  return body + fixedAk
 }
 
 /**
