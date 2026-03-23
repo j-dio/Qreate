@@ -221,6 +221,122 @@ export class PDFGenerator {
     return renumberedBody + '\n' + delimStr + '\n' + newAnswerLines.join('\n')
   }
 
+  /**
+   * Convert raw exam text into structured HTML with proper spacing.
+   *
+   * - Section headers (Multiple Choice:, True or False:, etc.) become bold <h3> elements
+   * - Each question block is wrapped in a <div class="question-block"> with bottom margin
+   * - Short Answer questions get a writing space below them
+   * - The Answer Key delimiter becomes a page-breaking header
+   * - Answer key entries each get a small gap div
+   */
+  private formatContentAsStructuredHTML(content: string): string {
+    const answerKeyDelimRegex = /^----+\s*Answer Key\s*----+\s*$/im
+    const delimMatch = content.match(answerKeyDelimRegex)
+
+    const sectionHeaderRegex =
+      /^(Multiple Choice:|True or False:|Fill in the Blanks:|Short Answer:)\s*$/im
+    const questionLineRegex = /^\d+\.\s+\S/
+    const answerKeyLineRegex = /^\d+\.\s+/
+
+    const escHtml = (text: string): string =>
+      text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+
+    let examBody = content
+    let answerKeyRaw = ''
+    let answerKeyDelimText = '----Answer Key----'
+
+    if (delimMatch && delimMatch.index !== undefined) {
+      examBody = content.slice(0, delimMatch.index)
+      answerKeyRaw = content.slice(delimMatch.index + delimMatch[0].length)
+      answerKeyDelimText = delimMatch[0].trim()
+    }
+
+    // --- Render exam body ---
+    // Collect lines and group into question blocks or section headers
+    const examLines = examBody.split('\n')
+
+    // Detect whether we are currently in a Short Answer section
+    let inShortAnswer = false
+
+    let examHtml = ''
+    let currentBlockLines: string[] = []
+    let currentBlockIsQuestion = false
+    let currentBlockIsShortAnswer = false
+
+    const flushBlock = (): void => {
+      if (currentBlockLines.length === 0) return
+      if (currentBlockIsQuestion) {
+        const blockContent = currentBlockLines.map(escHtml).join('<br>')
+        examHtml += `<div class="question-block">${blockContent}`
+        if (currentBlockIsShortAnswer) {
+          examHtml += `<div class="writing-space"></div>`
+        }
+        examHtml += `</div>\n`
+      } else {
+        // non-question non-header lines (e.g. "General Topic: …") — emit as paragraph
+        examHtml += `<p>${currentBlockLines.map(escHtml).join('<br>')}</p>\n`
+      }
+      currentBlockLines = []
+      currentBlockIsQuestion = false
+      currentBlockIsShortAnswer = false
+    }
+
+    for (const rawLine of examLines) {
+      const trimmed = rawLine.trim()
+      if (trimmed === '') continue // skip blank lines — CSS spacing handles separation
+
+      // Section header?
+      if (sectionHeaderRegex.test(trimmed)) {
+        flushBlock()
+        inShortAnswer = /^short.{0,5}answer/i.test(trimmed)
+        examHtml += `<h3 class="section-header">${escHtml(trimmed)}</h3>\n`
+        continue
+      }
+
+      // Question line (starts a new block)?
+      if (questionLineRegex.test(trimmed)) {
+        flushBlock()
+        currentBlockIsQuestion = true
+        currentBlockIsShortAnswer = inShortAnswer
+        currentBlockLines.push(rawLine)
+        continue
+      }
+
+      // Option line or continuation of current block
+      if (currentBlockIsQuestion) {
+        currentBlockLines.push(rawLine)
+      } else {
+        // Before the first question (e.g., "General Topic:" line)
+        currentBlockLines.push(rawLine)
+      }
+    }
+    flushBlock()
+
+    // --- Render answer key ---
+    let answerKeyHtml = ''
+    if (delimMatch) {
+      answerKeyHtml += `<h3 class="answer-key-header">${escHtml(answerKeyDelimText)}</h3>\n`
+      for (const rawLine of answerKeyRaw.split('\n')) {
+        const trimmed = rawLine.trim()
+        if (trimmed === '') continue
+        if (answerKeyLineRegex.test(trimmed)) {
+          answerKeyHtml += `<div class="answer-entry">${escHtml(trimmed)}</div>\n`
+        } else {
+          // Continuation of a multi-line answer (e.g., short answer text)
+          answerKeyHtml += `<div class="answer-entry answer-continuation">${escHtml(trimmed)}</div>\n`
+        }
+      }
+    }
+
+    return examHtml + answerKeyHtml
+  }
+
   private formatGroqExamAsHTML(examData: any): string {
     const { content, totalQuestions, metadata } = examData
 
@@ -266,9 +382,40 @@ export class PDFGenerator {
       color: #666;
     }
     .content {
-      white-space: pre-line;
       font-size: 12px;
       line-height: 1.5;
+    }
+    .question-block {
+      margin-bottom: 16px;
+    }
+    .section-header {
+      font-weight: bold;
+      font-size: 14px;
+      margin-top: 24px;
+      margin-bottom: 12px;
+      border-bottom: 1px solid #999;
+      padding-bottom: 4px;
+    }
+    .writing-space {
+      min-height: 60px;
+      border-bottom: 1px solid #ccc;
+      margin-bottom: 16px;
+    }
+    .answer-entry {
+      margin-bottom: 6px;
+    }
+    .answer-continuation {
+      margin-left: 20px;
+      margin-bottom: 4px;
+    }
+    .answer-key-header {
+      font-weight: bold;
+      font-size: 16px;
+      margin-top: 32px;
+      margin-bottom: 16px;
+      border-bottom: 2px solid #333;
+      padding-bottom: 8px;
+      page-break-before: always;
     }
     .page-break {
       page-break-before: always;
@@ -291,9 +438,9 @@ export class PDFGenerator {
       ${totalQuestions} Questions | Generated with Qreate | ${new Date().toLocaleDateString()}
     </div>
   </div>
-  
+
   <div class="content">
-${normalisedContent}
+${this.formatContentAsStructuredHTML(normalisedContent)}
   </div>
 
   <div class="footer">
