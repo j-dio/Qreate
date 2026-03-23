@@ -29,9 +29,8 @@ Students study their notes, feel prepared, then freeze on the actual exam — be
 
 ## Demo
 
-https://github.com/user-attachments/assets/REPLACE-WITH-VIDEO-ID
-
-> Upload your `demo_final.mp4` via GitHub: edit this README on github.com, drag the mp4 into the text area, and GitHub will generate a permanent `user-attachments` URL. Replace the placeholder above with that URL.
+https://github.com/user-attachments/assets/[REPLACE-WITH-VIDEO-ID
+](https://github.com/user-attachments/assets/20c73652-8413-4bf1-a78b-35a1943c2f29)
 
 ## Architecture
 
